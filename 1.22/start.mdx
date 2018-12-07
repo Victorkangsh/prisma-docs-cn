@@ -1,0 +1,307 @@
+import Code from '../home/demos/code'
+
+# 快速上手
+
+**Prisma是现代应用程序的数据层**。 它通过 **Prisma client**使用通用数据库抽象替换传统的ORM和数据访问层。 Prisma用于构建 **GraphQL服务器，REST API等**。
+
+- **各种语言的Prisma client**，如JavaScript，TypeScript，Flow，Go。
+- **支持多个数据库**，如MySQL，PostgreSQL，MongoDB(目前仅以上三种，后续支持更多)。
+- **类型安全的数据库访问**包括过滤器，聚合，分页和事务。
+- **数据库的实时事件系统**以获得有关数据库事件的通知。
+- **具有简单SDL语法的声明性数据建模和迁移（可选）**。
+
+## 目录
+
+- [开始](#开始)
+- [案例](#案例)
+- [架构](#架构)
+- [连接数据库](#连接数据库)
+- [社区](#社区)
+- [贡献](#贡献)
+
+## 开始
+
+### 1. 安装
+
+npm或yarn安装，国内推荐使用cnpm：
+
+<Code>{`
+# 没有cnpm请先安装：npm i -g cnpm
+cnpm i -g prisma
+# or
+yarn global add prisma
+`}</Code>
+
+mac用户也可选择使用brew安装：
+
+<Code>{`
+brew tap prisma/prisma
+brew install prisma
+`}</Code>
+
+### 2. 连接数据库和Prisma
+
+有两种方式启动数据库和Prisma，熟悉docker的用户选择第一种，不会docker的用户可以选择先部署在Prisma提供的云上，选第二种方式：
+
+##### 1. Docker用户
+
+<Code>{`
+prisma init hello-world
+`}</Code>
+
+在终端中可以看到各种选项，按如下选择:
+
+- 选择 **Create new database** (你也可以选择 [existing database](https://prisma.1wire.com/blog/existingdatabase/) )
+- 选择数据库类型: **MySQL** 或 **PostgreSQL**
+- 选择生成 **Prisma Client**的编程语言: **TypeScript**, **Flow**, **JavaScript** 或 **Go**
+
+向导终止后，运行以下命令来启动Prisma：
+
+<Code>{`
+cd hello-world
+docker-compose up -d
+`}</Code>
+
+> 部署到已有数据库？修改docker-compose.yml中的参数为你私有数据库参数即可（目前只支持PostgreSQL）。
+
+##### 2. Prisma提供测试服务器
+
+<Code>{`
+prisma init hello-world
+`}</Code>
+
+在终端中可以看到各种选项，按上下键选择（windows用户建议使用PowerShell）:
+
+- 选择 **Demo server**
+- 此时会打开app.prisma.io网页，可以注册登录或使用github账户登录，登录后点击授权即可。
+**注意此处千万不能用数字开头的邮箱注册（尤其qq邮箱），包括注册github的邮箱，如果你的github账户邮箱由数字开头，建议用字母开头邮箱注册app.prisma.io**
+- 终端显示 **Authenticating** 后选择你想部署在哪个区域，有两个选择，欧洲和美国，后面有延迟状态，选延迟低的回车确认。如：账户名/demo-us1 即美国地区。
+- 填入你想使用的名字，这里我们直接回车，选择stage分支，默认是dev，再次直接回车就行。
+- 选择生成 **Prisma Client**的编程语言，这里我们选择 **Prisma JavaScript Client**,如选择TS，注意后面安装依赖会多个graphql-tools。
+- 初始文件已生成，按照提示进入目录部署： cd hello-world && prisma deploy
+- 此时你的后端API已经可以访问，打开终端显示的http地址即可看到Prisma playground
+
+> `prisma.yml`是Prisma的根配置文件。
+> `datamodel.prisma`定义应用程序的数据库的数据模型(它基本上定义了数据库模式)。
+> 如果报错，请prisma account 查看名称开头是否为数字。
+
+### 3. 定义数据模型
+
+打开编辑器编辑 `datamodel.prisma` 使用SDL语言风格 [SDL](https://www.prisma.io/blog/graphql-sdl-schema-definition-language-6755bcb9ce51/) 每个模型在数据库里对应一张表:
+
+<Code lang="graphql">{`
+type User {
+  id: ID! @unique
+  email: String @unique
+  name: String!
+  posts: [Post!]!
+}
+type Post {
+  id: ID! @unique
+  title: String!
+  published: Boolean! @default(value: "false")
+  author: User
+}
+`}</Code>
+
+### 4. 部署 Prisma API
+
+在终端输入以下命令变更数据库表并生成新client：
+
+<Code>{`
+prisma deploy
+prisma generate
+`}</Code>
+
+Prisma API基于数据模型进行部署，并为该文件中的每个模型公开CRUD和实时操作。
+
+### 5. 使用 Prisma client (JavaScript)
+
+Prisma客户端连接到Prisma API，允许你对数据库执行读写操作。 本节介绍如何使用 **JavaScript** 中的Prisma client。
+
+首先，在`hello-world`中初始化并安装依赖：
+
+<Code>{`
+cnpm init -y
+cnpm install --save prisma-client-lib
+prisma generate
+`}</Code>
+
+在`hello-world`目录中创建一个新的Node脚本：
+
+<Code>{`
+touch index.js
+#or 在编辑器中新建index.js
+`}</Code>
+
+编辑如下代码：
+
+<Code lang="javascript">{`
+const { prisma } = require('./generated/prisma-client')
+// 一个main函数，以便我们可以使用async/await
+async function main() {
+  // 新建一个user，并新建一个post文章
+  const newUser = await prisma
+    .createUser({
+      name: "Alice",
+      posts: {
+        create: {
+          title: "The data layer for modern apps",
+        }
+      },
+    })
+  console.log("Created new user: \${newUser.name} (ID: \${newUser.id})")
+  // 从数据库中读取所有用户user并将其打印到控制台
+  const allUsers = await prisma.users()
+  console.log(allUsers)
+  // 从数据库中读取所有文章post并将其打印到控制台
+  const allPosts = await prisma.posts()
+  console.log(allPosts)
+}
+main().catch(e => console.error(e))
+`}</Code>
+
+最后，在终端启动这个文件：
+
+<Code>{`
+node index.js
+`}</Code>
+
+此时终端显示用户已被存到数据库：
+
+<Code>{`
+Created new user: Alice (ID: cjn70mkjlgnv00b77iyk9zx0e)
+[ { id: 'cjn70mkjlgnv00b77iyk9zx0e', email: null, name: 'Alice' } ]
+[ { id: 'cjn70mkjrgnv10b77nhqgg2zd', title: 'The data layer for modern apps', published: false } ]
+`}</Code>
+
+<details><summary><b>查看更多操作</b></summary>
+
+<Code lang="javascript">{`
+const usersCalledAlice = await prisma
+  .users({
+    where: {
+      name: "Alice"
+    }
+  })
+`}</Code>
+
+<Code lang="javascript">{`
+// replace the __USER_ID__ placeholder with an actual user ID
+const updatedUser = await prisma
+  .updateUser({
+    where: { id: "__USER_ID__" },
+    data: { email: "alice@prisma.io" }
+  })
+`}</Code>
+
+<Code lang="javascript">{`
+// replace the __USER_ID__ placeholder with an actual user ID
+ const deletedUser = await prisma
+  .deleteUser({ id: "__USER_ID__" })
+`}</Code>
+
+<Code lang="javascript">{`
+const postsByAuthor = await prisma
+  .user({ email: "alice@prisma.io" })
+  .posts()
+`}</Code>
+
+</details>
+
+
+### 6. 下一步
+
+以上操作仅展示基本能力，数据也是写死的，学习真实环境代码，移步文档和教程
+
+**[官方文档最新版本](https://prisma.1wire.com/docs)**
+
+- [在已存在数据库上使用 Prisma](https://prisma.1wire.com/blog/existingdatabase/)
+- [使用 Prisma client 构建APP](https://prisma.1wire.com/docs/part3)
+- [Prisma 原理](https://prisma.1wire.com/docs/part4).
+
+## 案例
+
+Prisma模板集合 💡
+
+| 示例 | 语言 | 描述 |
+|:------|:----------:|:-------------|
+| [`flow-script`](https://github.com/prisma/prisma-examples/tree/master/flow-script) | [Flow](https://flow.org/) | Simple usage of Prisma client in script |
+| [`go-cli-app`](https://github.com/prisma/prisma-examples/tree/master/go-cli-app) | [Golang](https://en.wikipedia.org/wiki/Go_(programming_language)) | Simple CLI todo list app |
+| [`go-graphql`](https://github.com/prisma/prisma-examples/tree/master/go-graphql) | [Golang](https://en.wikipedia.org/wiki/Go_(programming_language)) | Simple GraphQL server |
+| [`node-cli-app`](https://github.com/prisma/prisma-examples/tree/master/node-cli-app) | [Node.JS](https://nodejs.org/en/) | Simple CLI todo list app |
+| [`node-graphql-auth`](https://github.com/prisma/prisma-examples/tree/master/node-graphql-auth) |  [Node.JS](https://nodejs.org/en/) | GraphQL server with email-password authentication |
+| [`node-graphql-schema-delegation`](https://github.com/prisma/prisma-examples/tree/master/node-graphql-schema-delegation) | [Node.JS](https://nodejs.org/en/) | [Schema delegation](https://prisma.1wire.com/docs/part3) with the Prisma client |
+| [`node-graphql`](https://github.com/prisma/prisma-examples/tree/master/node-graphql) |  [Node.JS](https://nodejs.org/en/) | Simple GraphQL server |
+| [`node-rest-express`](https://github.com/prisma/prisma-examples/tree/master/node-rest-express) | [Node.JS](https://nodejs.org/en/) | Simple REST API with Express.JS |
+| [`node-script`](https://github.com/prisma/prisma-examples/tree/master/node-script) | [Node.JS](https://nodejs.org/en/) | Simple usage of Prisma client in script |
+| [`typescript-cli-app`](https://github.com/prisma/prisma-examples/tree/master/typescript-cli-app) | [TypeScript](https://www.typescriptlang.org/) | Simple CLI todo list app |
+| [`typescript-graphql-auth`](https://github.com/prisma/prisma-examples/tree/master/typescript-graphql-auth) | [TypeScript](https://www.typescriptlang.org/) | GraphQL server with email-password authentication |
+| [`typescript-graphql`](https://github.com/prisma/prisma-examples/tree/master/typescript-graphql) | [TypeScript](https://www.typescriptlang.org/) | Simple GraphQL server |
+| [`typescript-graphql-schema-delegation`](https://github.com/prisma/prisma-examples/tree/master/typescript-graphql-schema-delegation) | [TypeScript](https://www.typescriptlang.org/) | [Schema delegation](https://prisma.1wire.com/docs/part3) with the Prisma client |
+| [`typescript-script`](https://github.com/prisma/prisma-examples/tree/master/typescript-script) | [TypeScript](https://www.typescriptlang.org/) | Simple usage of Prisma client in script |
+
+这里是一个仿AirBnb后端的例子 [**AirBnB clone example**](https://github.com/prismagraphql/graphql-server-example) 我们写了一个包含Prisma全部用例的项目.
+
+## 架构
+
+Prisma在后端架构中扮演 **数据层** 的角色，取代传统的ORM和自定义数据访问层。 它支持_layered架构_，可以更好地分离关注点_并提高整个后端的_maintainability_。
+
+** Prisma client**在你的应用程序服务器中用于通过Prisma API对你的数据库执行读写操作。
+
+Prisma作为_standalone processes_运行，允许它独立于应用程序服务器进行扩展。
+
+<div align="center"><img src="https://imgur.com/OyIQQxF.png" height="132" alt="prisma"/></div>
+
+## 连接数据库
+
+[数据库连接器](https://github.com/prisma/prisma/issues/1751) 提供Prisma和底层数据库之间的链接。
+
+现在可以使用这几个数据库:
+
+- MySQL
+- PostgreSQL
+- MongoDB
+
+### 即将更新
+
+如果你有兴趣参与以下连接器之一的预览，请加入我们的微信群。
+
+- [Elastic Search](https://github.com/prisma/prisma/issues/1665)
+- [MS SQL](https://github.com/prisma/prisma/issues/1642)
+- [Oracle](https://github.com/prisma/prisma/issues/1644)
+- [ArangoDB](https://github.com/prisma/prisma/issues/1645)
+- [Neo4j](https://github.com/prisma/prisma/issues/1646)
+- [Druid](https://github.com/prisma/prisma/issues/1647)
+- [Dgraph](https://github.com/prisma/prisma/issues/1648)
+- [DynamoDB](https://github.com/prisma/prisma/issues/1655)
+- [Cloud Firestore](https://github.com/prisma/prisma/issues/1660)
+- [CockroachDB](https://github.com/prisma/prisma/issues/1705)
+- [Cassandra](https://github.com/prisma/prisma/issues/1750)
+- [Redis](https://github.com/prisma/prisma/issues/1722)
+- [AWS Neptune](https://github.com/prisma/prisma/issues/1752)
+- [CosmosDB](https://github.com/prisma/prisma/issues/1663)
+- [Influx](https://github.com/prisma/prisma/issues/1857)
+
+加入讨论，呼声最高的我们将优先完成!
+
+## 社区
+
+Prisma 的[社区](https://www.prisma.io/community) ! 👋
+
+- [WeChat](https://prisma.1wire.com/static/favicon/wechatimg.png)
+- [Forum](https://www.prisma.io/forum)
+- [Slack](https://slack.prisma.io/)
+- [Twitter](https://twitter.com/prisma)
+- [Facebook](https://www.facebook.com/prisma.io)
+- [Email](mailto:kwc@1wire.com)
+
+## 贡献
+
+欢迎贡献,参与中文翻译[地址](https://github.com/victorkangsh/prisma-docs-cn)
+
+参考 [how to the contribution guide](https://github.com/prisma/prisma/blob/master/CONTRIBUTING.md)
+
+版本分为三个： **alpha**，**beta**和 **stable** 。关于版本和Prisma的发布流程参考（https://www.prisma.io/blog/improving-prismas-release-process-yaey8deiwaex/）。
+
+**[官方文档最新版本](https://prisma.1wire.com/docs)**

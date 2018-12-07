@@ -1,0 +1,631 @@
+import Code from '../home/demos/code'
+import {InternalLink} from './text/link';
+
+## Prisma Server部署
+
+Prisma services 部署在 _Prisma servers_上.
+
+![](https://i.imgur.com/xMXxsku.png)
+
+本章提供配置，启动，维护和监视Prisma服务器所需的所有信息。
+
+### 本地Prisma配置
+
+你可以使用Docker运行Prisma服务的本地实例。
+
+本页介绍如何将Prisma与本地数据库实例一起使用。Prisma服务器和数据库都是通过Docker在本地配置的。
+
+### 示例Docker Compose设置
+
+#### MySQL
+
+下面的Docker Compose文件，配置了两个Docker容器:
+
+- `prisma`:容器中运行你的Prisma服务器。
+- `mysql-db`:容器运行的本地MySQL实例，基于[MySQL的docker镜像](https://hub.docker.com/_/mysql/)。
+
+prisma正在使用mysql-db容器作为其数据库。它不是通过IP地址或URL 引用数据库host，而是简单地将mysql-db镜像作为数据库引用host：
+
+<Code lang="yaml">{`
+version: '3'
+services:
+  prisma:
+    image: prismagraphql/prisma:1.22
+    restart: always
+    ports:
+    - "4466:4466"
+    environment:
+      PRISMA_CONFIG: |
+        managementApiSecret: my-server-secret-123
+        port: 4466
+        databases:
+          default:
+            connector: mysql
+            migrations: true
+            host: mysql-db
+            port: 3306
+            user: root
+            password: prisma
+  mysql-db:
+    image: mysql:5.7
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: prisma
+    volumes:
+      - mysql:/var/lib/mysql
+volumes:
+  mysql:
+`}</Code>
+
+#### Postgres
+
+下面的Docker Compose文件，配置了两个Docker容器:
+
+- `prisma`:容器中运行你的Prisma服务器。
+- `postgres-db`:容器运行的本地postgres实例，基于[postgres多克尔图像]上(https://hub.docker.com/_/postgres/)。
+
+`prisma`使用`postgres-db`容器作为数据库。它不是通过IP地址或URL 引用数据库host，而是简单地将postgres-db镜像作为数据库引用host：
+
+<Code lang="yaml">{`
+version: '3'
+services:
+  prisma:
+    image: prismagraphql/prisma:1.22
+    restart: always
+    ports:
+    - "4466:4466"
+    environment:
+      PRISMA_CONFIG: |
+        port: 4466
+        managementApiSecret: mysecret42
+        databases:
+          default:
+            connector: postgres
+            host: postgres-db
+            port: 5432
+            user: prisma
+            password: prisma
+            migrations: true
+  postgres-db:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: prisma
+      POSTGRES_PASSWORD: prisma
+    volumes:
+      - postgres:/var/lib/postgresql/data
+volumes:
+  postgres:
+`}</Code>
+
+#### Mongo
+
+下面的Docker Compose文件，配置了两个Docker容器:
+
+- `prisma`:容器中运行你的Prisma服务器。
+- `mongo`:容器运行的本地mongo实例，基于[mongo的docker镜像](https://hub.docker.com/_/mongo/)。
+
+prisma正在使用mongo容器作为其数据库。它不是通过IP地址或URL 引用数据库host，而是简单地将mongo镜像作为数据库引用host：
+
+<Code lang="yaml">{`
+version: '3'
+services:
+  prisma:
+    image: prismagraphql/prisma:1.22
+    restart: always
+    ports:
+    - "4466:4466"
+    environment:
+      PRISMA_CONFIG: |
+        port: 4466
+        # uncomment the next line and provide the env var PRISMA_MANAGEMENT_API_SECRET=my-secret to activate cluster security
+        # managementApiSecret: my-secret
+        databases:
+          default:
+            connector: mongo
+            host: mongo
+            port: 27017
+            user: prisma
+            password: prisma
+            migrations: true
+            rawAccess: true
+  mongo:
+    image: mongo:3.6
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: prisma
+      MONGO_INITDB_ROOT_PASSWORD: prisma
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo:/var/lib/mongo
+volumes:
+  mongo:
+`}</Code>
+
+Mongo的支持目前为preview，其定义和关系数据库有很大不同，如需了解，请阅读[这里](https://www.prisma.io/docs/releases-and-maintenance/releases-and-beta-access/mongodb-preview-b6o5/)
+
+### Management API
+
+Prisma服务器的Management API用于部署和管理服务器上运行的Prisma服务。它可以通过`/management`路径获得，例如`http://localhost:4466/management`。
+
+###  API参考
+
+Management API公开以下操作（你可以在此处找到Management API的完整GraphQL架构）。[链接](https://gist.github.com/nikolasburk/a1421fc218f00b6f552cc455ae309af0))。
+
+<Code lang="graphql">{`
+type Query {
+  """
+  Shows the status of the next migration in line to be applied to the project.
+  If no such migration exists, it shows the last applied migration.
+  """
+  migrationStatus(name: String!, stage: String!): Migration!
+  """Shows all projects the caller has access to."""
+  listProjects: [Project!]!
+  """
+  Shows all migrations for the project. Debug query, will likely be removed in the future.
+  """
+  listMigrations(name: String!, stage: String!): [Migration!]!
+  """Gets a project by name and stage."""
+  project(name: String!, stage: String!): Project!
+  """Information about the server"""
+  serverInfo: ServerInfo!
+  """generates a token for the given project"""
+  generateProjectToken(name: String!, stage: String!): String!
+}
+type Mutation {
+  deploy(input: DeployInput!): DeployPayload
+  addProject(input: AddProjectInput!): AddProjectPayload
+  deleteProject(input: DeleteProjectInput!): DeleteProjectPayload
+  setCloudSecret(input: SetCloudSecretInput!): SetCloudSecretPayload
+}
+`}</Code>
+
+**注意**
+
+由于遗留原因，Management API目前使用过时的术语来引用某些Prisma概念。最重要的是，**Prisma services**称为**projects**（例如listProjects），**Prisma servers**在API术语中称为**clusters**。
+
+
+
+### 身份验证和安全
+
+一旦启动并运行，Prisma服务器主要通过Management API使用。本页介绍了如何保护Management API并保护Prisma服务器免受不必要的请求的影响。
+
+###  Management API的密码
+
+为了确保只有授权的用户能够通过管理API来执行操作，它需要一个_secret_保护。这个密码被称为**Management API secret**。
+
+Management API密钥在你用于配置Prisma服务器的Docker Compose文件中设置。它是PRISMA_CONFIG环境变量的一部分，并通过management Api Secret密钥指定：
+
+<Code>{`
+version: '3'
+services:
+  prisma:
+    image: prismagraphql/prisma:__LATEST_PRISMA_VERSION__
+    restart: always
+    ports:
+    - "4466:4466"
+    environment:
+      PRISMA_CONFIG: |
+        managementApiSecret: __YOUR_PRISMA_MANAGEMENT_API_SECRET__
+        port: __YOUR_PRISMA_SERVER_PORT__
+        databases:
+          default:
+            connector: __YOUR_DATABASE_CONNECTOR__
+            migrations: __ENABLE_DB_MIGRATIONS__
+            host: __YOUR_DATABASE_HOST__
+            port: __YOUR_DATABASE_PORT__
+            user: __YOUR_DATABASE_USER__
+            password: __YOUR_DATABASE_PASSWORD__
+`}</Code>
+
+
+
+**注意**
+
+如果Prisma服务器的Docker配置不包含 management Api Secret，则每个有权访问Prisma服务器URL的人都可以向其发出任意请求。这包括部署和删除Prisma服务以及修改数据。
+
+
+
+###  Management API token
+
+service toke遵守[JSON Web Token](https://jwt.io/)(JWT)规范([RFC 7519](https://tools.ietf.org/html/rfc7519)):
+
+一个JWT有以下三个部分组成:
+
+-  **header**头:通常由两部分组成：令牌的类型，即JWT使用的散列算法（在Prisma服务令牌的环境下为HS256）。
+
+<Code lang="json">{`
+{
+  "alg": "HS256",
+  "typ": "JWT"
+}
+`}</Code>
+
+-  **Payload**:包含声明。声明是关于实体（通常是用户）和其他数据的声明。以下是修改调用demo部署到dev服务的权限时的样子：
+
+<Code lang="json">{`
+{
+  "grants": [
+    {
+      "target": "demo/dev",
+      "action": "*"
+    }
+  ],
+  "iat": 1532956915,
+  "exp": 1690744915
+}
+`}</Code>
+
+ -  **Signature**签名:签名用于验证消息在此过程中未被更改。要创建签名部分，你必须采用编码header，编码的payload，secret，标头中指定的算法，并对其进行签名。例如，如果要使用HMAC SHA256算法，将按以下方式创建签名：
+ 
+<Code lang="javascript">{`
+HMACSHA256(
+  base64UrlEncode(header) + "." +
+  base64UrlEncode(payload),
+  secret)
+`}</Code>
+
+因此，JWT通常如下所示： xxxxx.yyyyy.zzzzz
+
+> 了解JWTs [这里](https://jwt.io/introduction/)。
+
+#### Claims
+
+所述JWT必须包含以下的[Claims](https://jwt.io/introduction/#payload):
+
+-  **Issued at**: `iat`字段包含一个Unix时间戳和当生成所述令牌的确切时间。
+-  **Expiration date**: `exp`字段包含表示令牌到期日期的Unix时间戳。
+-  **Grants**: 该`grants`字段是具有两个键的对象
+  - 在`target`字段指定_name_和_stage_指定使用特定操作修改的服务。使用`*/*`通配符来允许Prisma服务器上运行的所有服务执行操作。
+  - 在`action`字段指定允许哪些操作target。通配符*允许所有操作。
+
+以下是使用通配符的JWT的示例payload，以允许对所有服务执行所有操作：
+
+<Code lang="json">{`
+  {
+    "grants": [
+      {
+        "target": "*/*",
+        "action": "*"
+      }
+    ],
+    "iat": 1532956915,
+    "exp": 1690744915
+  }
+`}</Code>
+
+### 对Management API进行身份验证
+
+有两种方法可以使用Management API：
+
+- 使用Prisma CLI，然后进行实际的API请求
+- 直接将请求发送到你的Prisma服务器的`/management`路径
+
+#### 使用Prisma CLI
+
+使用Prisma CLI来执行Management API请求(例如，使用`prisma deploy`)，你无需担心生成Management API令牌。CLI会在每次API请求时为你生成它们。因此，CLI需要知道Prisma服务器的Management API机密，以便生成Management API令牌并验证其请求。
+
+**这就是使用Prisma CLI时必须设置环境变量PRISMA_MANAGEMENT_API_SECRET的原因。**。
+
+该CLI读取来自`PRISMA_MANAGEMENT_API_SECRET`环境变量的密码，并用它来生成JWT然后附加到API请求。
+
+根据你的shell，设置环境变量的语法可能会有所不同。标准Unix shell(linux、mac)使用以下方式设置环境变量：
+
+<Code>{`
+export PRISMA_MANAGEMENT_API_SECRET="my-server-secret-42"
+`}</Code>
+
+#### 直接发送请求
+
+如果要将HTTP请求直接发送到Prisma服务器的Management API，则需要生成JWT并将其附加到HTTP头的Authorization字段（前缀Bearer和空格）。
+
+**注意**
+
+Prisma CLI有一个隐藏的帮助器命令，用于生成Management API令牌：prisma cluster-token。在运行之前，你需要设置PRISMA_MANAGEMENT_API_SECRET环境变量。请注意，此命令未正式记录，可能会更改，恕不另行通知。
+
+
+### Demo Servers (Prisma Cloud)
+
+Prisma的Demo Servers都在[Prisma cloud](https://www.prisma.io/cloud/)运行Prisma服务器。**Demo Servers的使用是免费的!**
+
+**注意**
+
+> Demo Servers不能在生产中使用，因为它们受传输速率限制并且在存储方面存在限制。
+
+
+Prisma的Demo Servers有两种_regions_可供选择:
+
+- 欧盟(爱尔兰)
+- 美国西部(俄勒冈)
+
+为了使用Prisma的Demo Servers，你需要在Prisma cloud登录。
+
+### Service endpoints
+
+部署到Prisma Demo服务器的Prisma服务的端点与在“常规”Prisma服务器上运行的服务的端点略有不同。
+
+部署到Prisma Demo服务器的服务在其URL中有一个额外的路径组件（前缀为服务的名称和阶段），即Prisma Cloud工作区的名称。
+
+以下面的端点为例： `https://eu1.prisma.sh/jane-doe/myservice/dev`
+
+此端点对有关服务的以下信息进行编码：
+
+- `eu1.prisma.sh`:该服务被部署到_EU_区域。(_US_区域使用`us1.prisma.sh`)。
+- `jane-doe`:在Prisma cloud工作区的名称。
+- `myservice`:该服务的名称。
+- `dev`:服务版本。
+
+### 使用
+
+目标用户:
+
+- 测试原型
+- 学习
+- 没有明显的用户群的个人项目
+
+### 限制
+
+#### 速率限制
+
+Prisma的Demo Servers是速率限制为**每10秒可发生10个请求**(平均)。
+
+如果超过这个速度，请求被排队在内存中。如果队列超过25个请求，立即返回一个错误。
+
+header字段throttled-by包含在HTTP响应中。它表示请求因节流而延迟了多长时间（以毫秒为单位）。
+
+#### 存储
+
+在Demo Servers上运行的服务Prisma的存储容量的上限是100MB。
+
+### 认证
+
+#### 登录
+
+用Demo Servers部署Prisma services之前，Prisma CLI需要与Prisma cloud进行身份验证。
+
+要用CLI登录到Prisma cloud，使用下面的命令:
+
+<Code>{`
+prisma login
+`}</Code>
+
+此命令会打开需要提供你的Prisma cloud凭据的浏览器窗口。如果凭据有效，则CLI在`〜/.prisma/config.yml`为`cloudSessionKey`生成Prisma cloud token，并将其存储。
+
+此token在后续请求用于对Demo Servers进行身份验证。
+
+#### 退出登录
+
+从Prisma CLI注销，使用`PRISMA logout`命令。它只是从`〜/.prisma/config.yml`删除`cloudSessionKey`。
+
+### 价钱
+
+FREE
+
+### Database Connector (MySQL)
+
+数据库连接器是Prisma的和底层数据库之间的_link_。 
+
+MySQL的连接器用于将一个Prisma服务器连接到[MySQL的](https://www.mysql.com/)数据库。
+
+数据库连接器的核心是:
+
+- 翻译传入GraphQL查询到SQL语句
+- 根据查询结果生成返回数据
+- 执行数据库迁移Migrations(可选)
+
+使用Docker配置Prisma服务器时，需要指定要使用哪个连接器才能连接到某个数据库。你可以通过connector属性提供此信息：
+
+<Code lang="yaml">{`
+PRISMA_CONFIG: |
+  managementApiSecret: __YOUR_PRISMA_MANAGEMENT_API_SECRET__
+  port: 4466
+  databases:
+    default:
+      connector: mysql
+      migrations: __ENABLE_DB_MIGRATIONS__
+      host: __YOUR_DATABASE_HOST__
+      port: __YOUR_DATABASE_PORT__
+      user: __YOUR_DATABASE_USER__
+      password: __YOUR_DATABASE_PASSWORD__
+      connectionLimit: __YOUR_CONNECTION_LIMIT__
+`}</Code>
+
+
+
+### 迁移Migrations
+
+在`PRISMA_CONFIG`环境变量`migrations`属性指定的数据库连接器是否能够更改基础数据库模式。
+
+对于现有的数据库(生产环境)，将Prisma服务器配置为不迁移已连接的数据库很有用。这可确保你不会意外地引入不需要的架构更改或丢失数据。
+
+<Code lang="yaml">{`
+PRISMA_CONFIG: |
+  managementApiSecret: __YOUR_PRISMA_MANAGEMENT_API_SECRET__
+  port: 4466
+  databases:
+    default:
+      connector: postgres
+      migrations: false
+      host: __YOUR_DATABASE_HOST__
+      port: __YOUR_DATABASE_PORT__
+      user: __YOUR_DATABASE_USER__
+      password: __YOUR_DATABASE_PASSWORD__
+`}</Code>
+
+#### 数据库迁移
+
+##### 通过Prisma启用迁移
+
+如果`migrations`被设置为TRUE;则部署Prisma服务将改变已连接数据库的结构。在这些情况下，Prisma CLI将是基于服务的数据模型管理数据库结构的主要接口：
+
+<Code lang="yaml">{`
+PRISMA_CONFIG: |
+  managementApiSecret: __YOUR_PRISMA_MANAGEMENT_API_SECRET__
+  port: 4466
+  databases:
+    default:
+      connector: postgres
+      migrations: true
+      host: __YOUR_DATABASE_HOST__
+      port: __YOUR_DATABASE_PORT__
+      user: __YOUR_DATABASE_USER__
+      password: __YOUR_DATABASE_PASSWORD__
+`}</Code>
+
+##### 禁用Prisma迁移
+
+如果`migrations`设置为`FALSE`，数据库架构被"锁定"，Prisma将不对其执行任何修改:
+
+<Code lang="yaml">{`
+PRISMA_CONFIG: |
+  managementApiSecret: __YOUR_PRISMA_MANAGEMENT_API_SECRET__
+  port: 4466
+  databases:
+    default:
+      connector: postgres
+      migrations: false
+      host: __YOUR_DATABASE_HOST__
+      port: __YOUR_DATABASE_PORT__
+      user: __YOUR_DATABASE_USER__
+      password: __YOUR_DATABASE_PASSWORD__
+`}</Code>
+
+### 管理数据库连接
+
+PRISMA_CONFIG中的connectionLimit属性定义Prisma服务将使用的数据库连接数。
+
+**注意**
+
+`connectionLimit`需要至少被设定为**2**。始终为Management API保留一个连接，所有其他连接用于Prisma服务。
+
+
+### Database Connector
+
+使用Docker配置Prisma服务器时，需要指定要使用哪个连接器才能连接到某个数据库。你可以通过connector属性提供此信息：
+
+<Code lang="yaml">{`
+PRISMA_CONFIG: |
+  managementApiSecret: __YOUR_PRISMA_MANAGEMENT_API_SECRET__
+  port: 4466
+  databases:
+    default:
+      connector: mysql | postgres | mongo
+      migrations: __ENABLE_DB_MIGRATIONS__
+      host: __YOUR_DATABASE_HOST__
+      port: __YOUR_DATABASE_PORT__
+      user: __YOUR_DATABASE_USER__
+      password: __YOUR_DATABASE_PASSWORD__
+      connectionLimit: __YOUR_CONNECTION_LIMIT__
+`}</Code>
+
+
+
+#### 迁移示例
+
+<Code lang="yaml">{`
+PRISMA_CONFIG: |
+  managementApiSecret: __YOUR_PRISMA_MANAGEMENT_API_SECRET__
+  port: 4466
+  databases:
+    default:
+      connector: postgres
+      migrations: __ENABLE_DB_MIGRATIONS__
+      host: __YOUR_DATABASE_HOST__
+      port: __YOUR_DATABASE_PORT__
+      user: __YOUR_DATABASE_USER__
+      password: __YOUR_DATABASE_PASSWORD__
+      connectionLimit: __YOUR_CONNECTION_LIMIT__
+`}</Code>
+
+
+### Channels & Releases
+
+发布版本可让你使用不同的Prisma版本。如果你想在正式发布之前测试新功能，这可能会有所帮助。
+
+有三种_channels_:**stable**, **beta**, **alpha**
+
+> 了解更多关于**Prisma的发布过程**[这里](https://www.prisma.io/blog/improving-prismas-release-process-yaey8deiwaex/)。
+
+#### Stable
+
+始终运行在生产服务器上的稳定版本。在稳定频道发布遵循双周节奏，相比测试只包括非常小的改动。这可确保版本中的功能组合已在beta上进行了全面测试。
+
+#### Beta
+
+测试版版本上的功能经过测试，在最终版本发布之前不太可能发生变化。测试版频道是尝试新功能并在稳定版本中提供反馈之前提供反馈的绝佳方式。
+
+#### Αlpha
+
+alpha版本非常适合希望尽早尝试新功能的贡献者和开发人员。alpha版本上的功能尚未经过全面测试，在将它们包含在稳定版本中之前可能会发生重大变化。
+
+### 使用alpha和beta版本
+
+稳定的版本是你Prisma的所做的一切默认。无论是安装Prisma CLI还是拉动最新的Docker镜像，你都可以下载最新的稳定版本。
+
+要使用Alpha和Beta版本，请按照下面列出的步骤操作。
+
+#### 测试版
+
+#####  Prisma CLI
+
+使用CNPM安装**Beta**Prisma CLI:
+
+<Code lang="sh">{`
+cnpm install -g prisma@beta
+`}</Code>
+
+##### Docker image
+
+你可以在Docker Hub上找到最新的beta镜像，或者在使用Docker CLI时使用__VERSION__-beta标记（__VERSION__是你要定位的Prisma版本的占位符）：
+
+<Code>{`
+docker pull prismagraphql/prisma:1.22-beta
+`}</Code>
+
+#### Αlpha
+
+使用CNPM 安装Prisma CLI 的alpha版本：
+
+#####  Prisma CLI
+
+<Code lang="sh">{`
+cnpm install -g prisma@alpha
+`}</Code>
+
+##### Docker image
+
+<Code>{`
+docker pull prismagraphql/prisma:1.22-alpha
+`}</Code>
+
+### 完整的docker-compose配置属性示例：
+
+<Code lang="yaml">{`
+version: '3'
+services:
+  prisma:
+    image: prismagraphql/prisma:__LATEST_PRISMA_VERSION__
+    restart: always
+    ports:
+    - "4466:4466"
+    environment:
+      PRISMA_CONFIG: |
+        managementApiSecret: __YOUR_MANAGEMENT_API_SECRET__
+        port: __YOUR_PRISMA_SERVER_PORT__
+        databases:
+          default:
+            connector: __YOUR_DATABASE_CONNECTOR__
+            migrations: __ENABLE_DB_MIGRATIONS__是否可以改变数据库表结构
+            host: __YOUR_DATABASE_HOST__
+            port: __YOUR_DATABASE_PORT__
+            user: __YOUR_DATABASE_USER__
+            password: __YOUR_DATABASE_PASSWORD__
+            connectionLimit: __YOUR_CONNECTION_LIMIT__连接数限制
+            database: _DATABASE_NAME_默认为prisma
+            ssl: _true OR false_是否启用ssl连接数据库
+`}</Code>
+
+下一节是一些Prisma 项目的例子
+
+<InternalLink href="/docs/part8" as="/docs/part8">Example</InternalLink>
