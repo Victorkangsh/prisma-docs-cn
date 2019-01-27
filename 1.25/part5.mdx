@@ -1,0 +1,2712 @@
+import Code from '../home/demos/code'
+import {InternalLink} from './text/link';
+
+
+## Prisma GraphQL API
+
+每个Prisma服务都公开一个GraphQL API，其中包含CRUD和服务数据模型中定义的类型的实时操作。 此API称为 **Prisma API**。
+
+定义Prisma API的类型和操作的GraphQL schema称为 **Prisma GraphQL schema**。 它由Prisma自动生成。
+
+试试的Prisma的playground
+
+点击[这里](https://eu1.prisma.sh/running-examples/hello-world/dev)试试在GraphQL playground 中的Prisma API。
+
+所述Prisma API是基于以下的数据模型:
+
+<Code lang="graphql">{`
+type Post {
+  id: ID! @unique
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  isPublished: Boolean! @default(value: "false")
+  title: String!
+  text: String!
+  author: User!
+}
+type User {
+  id: ID! @unique
+  email: String! @unique
+  password: String!
+  name: String!
+  posts: [Post!]!
+}
+`}</Code>
+
+本章介绍所有你需要了解的Prisma API，以及如何可以在各种环境中使用。
+
+### 概念
+
+本节解释了一些重要的概念，以了解Prisma API。
+
+除非另有说明，本页上的例子是基于以下数据模型的Prisma API:
+
+<Code lang="graphql">{`
+type User {
+  id: ID! @unique
+  email: String @unique
+  name: String!
+  posts: [Post!]!
+}
+type Post {
+  id: ID! @unique
+  title: String!
+  published: Boolean! @default(value: "false")
+  author: User
+}
+`}</Code>
+
+####  Prisma GraphQL schema
+
+Prisma数据库是定义Prisma API的数据类型和操作的[GraphQL schema](https://www.prisma.io/blog/graphql-server-basics-the-schema-ac5e2950214e/)。 它是自动生成的，并为service的数据模型中指定的模型指定CRUD和实时操作。
+
+![](https://i.imgur.com/jHkNjKU.png)
+
+#### 节点选择
+
+Prisma API中的许多操作仅影响现有节点的子集，有时仅影响单个节点，例如更新或删除节点。
+
+在这些情况下，你需要一种方法来询问API中的特定节点。 这就是`where`过滤器参数的用途。 它允许你指定用于选择应应用操作的节点的条件。
+
+可以通过使用`@unique`指令注释的任何字段选择节点。
+
+以下是需要选择节点的几种情况。
+
+**通过其`email`检索单个`User`节点**:
+
+<Code lang="graphql">{`
+query {
+  user(where: {
+    email: "alice@prisma.io"
+  }) {
+    id
+  }
+}
+`}</Code>
+
+<Code lang="javascript">{`
+{
+  "data": {
+    "user": {
+      "id": "cjkawhcz44a4c0a84un9a86wt"
+    }
+  }
+}
+`}</Code>
+
+**更新单个`POST`节点的`title`**:
+
+<Code lang="graphql">{`
+mutation {
+  updatePost(
+    where: {
+      id: "ohco0iewee6eizidohwigheif"
+    }
+    data: {
+      title: "GraphQL is awesome"
+    }
+  ) {
+    id
+  }
+}
+`}</Code>
+
+<Code lang="javascript">{`
+{
+  "data": {
+    "updatePost": {
+      "id": "ohco0iewee6eizidohwigheif"
+    }
+  }
+}
+`}</Code>
+
+**一次性完成对`POST`节点的批量更新`published`**(见[批量Mutation(#批量Mutation)):
+
+<Code lang="graphql">{`
+mutation {
+  updateManyPosts(
+    where: {
+      id_in: ["ohco0iewee6eizidohwigheif", "phah4ooqueengij0kan4sahlo", "chae8keizohmiothuewuvahpa"]
+    }
+    data: {
+      published: true
+    }
+  ) {
+    count
+  }
+}
+`}</Code>
+
+<Code lang="javascript">{`
+{
+  "data": {
+    "updateManyPosts": {
+      "count": 3
+    }
+  }
+}
+`}</Code>
+
+#### 批量Mutation
+
+节点选择概念的一个应用是Prisma API暴露的批量Mutation。 批量更新或删除已经过优化，可以更改大量节点。 因此，这些Mutation仅返回受影响的节点数，而不是特定节点上的完整信息。
+
+例如，Mutation`updateManyPosts`和`deleteManyPosts`提供了一个`where`参数来选择特定节点，并返回一个带有受影响节点数的`count`字段（参见例子）。
+
+<Code lang="graphql">{`
+mutation {
+  deleteManyUsers(
+    where: {
+      email_in: ["alice@prisma.io", "bob@prisma.io"]
+    }
+  ) {
+    count
+  }
+}
+`}</Code>
+
+<Code lang="javascript">{`
+{
+  "data": {
+    "deleteManyUsers": {
+      "count": 2
+    }
+  }
+}
+`}</Code>
+
+
+
+#### 连接(Relay Pagination & Aggregations)
+
+PRISMA提供两种方法通过关系字段检索节点列表:
+
+- 简单的关系查询(_direct_节点检索):
+
+  <Code lang="graphql">{`
+  query {
+    posts {
+      id
+      title
+      published
+    }
+  }
+  `}</Code>
+
+- Connection的查询:
+
+  <Code lang="graphql">{`
+  query {
+    postsConnection {
+      edges {
+        node {
+          id
+          title
+          published
+        }
+      }
+    }
+  }
+  `}</Code>
+
+
+与直接返回节点列表的简单关系查询相比，连接查询基于[Relay Connection](https://facebook.github.io/relay/graphql/connections.htm)模型。 除了分页信息之外，Prisma API中的连接还具有高级功能，如聚合。
+
+例如，虽然posts查询允许你选择特定的Post节点，按某些字段对它们进行排序并对结果进行分页，但postsConnection查询还允许你计算所有未发布的帖子：
+
+<Code lang="graphql">{`
+query {
+  postsConnection {
+    # \`aggregate\` 允许执行常见的聚合操作
+    aggregate {
+      count
+    }
+    edges {
+      # 每个“node”指的是一个“Post”节点
+      node {
+        title
+      }
+    }
+  }
+}
+`}</Code>
+<Code lang="javascript">{`
+{
+  "data": {
+    "postsConnection": {
+      "aggregate": {
+        "count": 1
+      },
+      "edges": [
+        {
+          "node": {
+            "title": "Watch all the talks from GraphQL Europe: bit.ly/gql-eu"
+          }
+        }
+      ]
+    }
+  }
+}
+`}</Code>
+
+> 查看[这些](https://github.com/prisma/prisma/issues/1312)功能的要求，了解即将实现的聚合操作。
+
+#### Transactions＆嵌套Mutation
+
+Prisma API中不是批处理操作的单个Mutation总是以事务方式执行，即使它们包含许多可能分布在多个相关节点上的操作。 这对于在多种类型上执行多个数据库写入的嵌套Mutation特别有用。
+
+嵌套Mutation是触及至少两个节点的Mutation，每个节点具有不同类型。 这是一个简单的例子：
+
+<Code lang="graphql">{`
+mutation {
+  createUser(data: {
+    name: "Sarah"
+    posts: {
+      create: [
+        { title: "GraphQL is great" }
+        { title: "Prisma is a data access layer" }
+      ],
+      connect: [
+        { id: "cjk1e3t7i1ark0b299pvrge5m" }
+      ]
+    }
+  }) {
+    id
+    posts {
+      id
+    }
+  }
+}
+`}</Code>
+
+这种Mutation总共涉及了 **4个**节点:
+
+- 它_creates_ **1个**新的`User`节点。
+- 它_creates_ **2个**`POST`节点。这两个`POST`节点也是直接_connected_到新的`User`节点。
+- 它_connects_新的`User`节点到**1个现有**`POST`节点。
+
+这种Mutation总进行**6个**单操作:
+
+-  _Creating_ **1个**`User`节点。
+-  _Creating_ **2个**`POST`节点。
+-  _Connecting_ **3个**`POST`节点到新的`User`节点。
+
+如果上述任何一项操作的失败(例如，由于的违反`@unique`约束)，则_全部_Mutation回滚!
+
+Mutation是事务性的，意味着它们是原子的和孤立的。 这意味着在相同嵌套Mutation的两个单独动作之间，没有其他Mutation可以改变数据。 在处理完整Mutation之前，也不能观察到单个动作的结果。
+
+#### 级联删除
+
+Prisma支持数据模型中关系的不同删除行为。 有两种主要的删除行为：
+
+- `CASCADE`:当删除与一个或多个其他节点有关的节点时，也会删除这些节点。
+- `SET_NULL`:当删除与一个或多个其他节点有关的节点时，引用已删除节点的字段将设置为null。
+
+如上所述，你可以为相关节点指定专用删除行为。 这就是`@ relation`指令的`onDelete`参数。
+
+请看下面的例子:
+
+<Code lang="graphql">{`
+type User {
+  id: ID! @unique
+  comments: [Comment!]! @relation(name: "CommentAuthor", onDelete: CASCADE)
+  blog: Blog @relation(name: "BlogOwner", onDelete: CASCADE)
+}
+type Blog {
+  id: ID! @unique
+  comments: [Comment!]! @relation(name: "Comments", onDelete: CASCADE)
+  owner: User! @relation(name: "BlogOwner", onDelete: SET_NULL)
+}
+type Comment {
+  id: ID! @unique
+  blog: Blog! @relation(name: "Comments", onDelete: SET_NULL)
+  author: User @relation(name: "CommentAuthor", onDelete: SET_NULL)
+}
+`}</Code>
+
+让我们研究一下三种类型的删除行为:
+
+- 当一个`User`节点被删除，
+  - 所有相关的`Comment`节点将被删除。
+  - 相关`Blog`节点将被删除。
+- 当一个`Blog`节点被删除，
+  - 所有相关的`Comment`节点将被删除。
+  - 相关`User`节点将有其`blog`字段设置为`null`。
+- 当一个`Comment`节点被删除，
+  - 相关`Blog`节点继续存在，并且删除`Comment`节点从其`comments`列表中删除。
+  - 相关`User`节点继续存在，并且删除`Comment`节点从其`comments`列表中删除。
+
+#### Authentication认证
+
+可以使用prisma.yml中的服务`secret`（指定为`secret`属性）来保护Prisma API：
+
+<Code lang="yaml">{`
+secret: my-secret-42
+`}</Code>
+
+作为Prisma services的开发者，你可以选择自己的服务密码。当服务被使用包含`secret`属性prisma.yml部署，该服务的Prisma API将需要通过_Service token_(JWT)的认证:
+
+![](https://i.imgur.com/cCmp8JI.png)
+
+获得业务令牌最简单的方法是通过在你的prisma.yml所在的同一目录中运行`prisma token`命令:
+
+<Code>{`
+$ prisma token
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkYXRhIjp7InNlcnZpY2UiOiJkZW1vQGRldiIsInJvbGVzIjpbImFkbWluIl19LCJpYXQiOjE1MzI1ODgzNzAsImV4cCI6MTUzMzE5MzE3MH0.Nv8coqsiwdwoSfWCBJHYfnr0WK2GRyqO5xTN6Q3IVkw
+`}</Code>
+
+将所生成的令牌复制到到所述Prisma API的HTTP请求`Autorization`头:
+
+<Code>{`
+curl '__YOUR_PRISMA_ENDPOINT__' \\
+-H 'Content-Type: application/json' \\
+-H 'Authorization: Bearer __YOUR_SERVICE_TOKEN__' \\
+--data-binary '{"query":"mutation { createUser(data: { name: "Sarah" }) { id } }"'
+`}</Code>
+
+**注意**
+
+不要将服务机密和服务“令牌”与用于保护Prisma服务器的Management API的Prisma Management API密钥混淆。
+
+#### Service secret
+
+Service secret是由Prisma services的开发者指定的字母数字的随机字符串。在prisma.yml的`secret`属性中设置:
+
+<Code lang="yaml">{`
+secret: my-secret-42
+`}</Code>
+
+#### Service token
+
+Service token遵守[JSON web token](https://jwt.io/)(JWT)规范([RFC 7519](https://tools.ietf.org/html/rfc7519)):
+
+_"JSON Web Token"(JWT)是一种紧凑的，URL安全的方式，用于表示要在双方之间传输的声明.JWT中的声明被编码为JSON对象，用作JSON Web签名的有效负载（JWS） ）结构或作为JSON Web加密（JWE）结构的明文，使声明能够通过消息验证代码（MAC）进行数字签名或完整性保护和/或加密。“_
+
+一个JWT有以下三个部分组成:
+
+-  **Header**: 标头通常由两部分组成：令牌的类型，即JWT，以及正在使用的散列算法（在Prisma服务令牌的情况下为HS256）。
+
+  <Code lang="json">{`
+  {
+    "alg": "HS256",
+    "typ": "JWT"
+  }
+  `}</Code>
+
+-  **Payload**:`payload`包含声明。 声明是关于实体（通常是用户）和其他数据的声明。 以下是部署到dev阶段的名为demo的服务的样子：
+
+  <Code lang="json">{`
+  {
+    "data": {
+      "service": "demo@dev",
+      "roles": [
+        "admin"
+      ]
+    },
+    "iat": 1532530208,
+    "exp": 1533135008
+  }
+  }
+  `}</Code>
+
+ -  **Signature**:签名用于验证消息在此过程中未发生更改。 要创建签名部分，你必须采用编码标头，编码的有效负载，秘密，标头中指定的算法，并对其进行签名。 例如，如果要使用HMAC SHA256算法，将按以下方式创建签名：
+
+  <Code lang="javascript">{`
+  HMACSHA256(
+    base64UrlEncode(header) + "." +
+    base64UrlEncode(payload),
+    secret)
+  `}</Code>
+
+因此，JWT通常是这样的:`xxxxx.yyyyy.zzzzz`
+
+> 了解更多关于JWTs [这里](https://jwt.io/introduction/)。
+
+##### Claims
+
+所述JWT必须包含以下的[Claims](https://jwt.io/introduction/#payload):
+
+- **Issued at**：`iat`字段包含一个Unix时间戳，其中包含生成令牌的确切时间。
+- **Expiration date**：`exp`字段包含表示令牌到期日期的Unix时间戳。 服务令牌完全有效**一周**。
+- **Service information**：`data`字段是一个有两个键的对象
+   - `service`字段指定服务的_name_和_stage_
+   - “roles”字段包含使用该令牌授予的访问权限。 将来可能会通过引入一个角色概念来支持更细粒度的访问控制，例如`[“write：Log”，“read：*”]`
+
+这里有一个JWT的示例Payload:
+
+<Code lang="json">{`
+{
+  "data": {
+    "service": "myservice@prod",
+    "roles": [
+      "admin"
+    ]
+  },
+  "iat": 1532530208,
+  "exp": 1533135008
+}
+`}</Code>
+
+##### 发送service token
+
+该service token是_bearer_token:
+
+_ **_bearer_token**:一种安全令牌，其属性是拥有该令牌的任何一方（“持票人”）可以以任何其他拥有该令牌的方式使用该令牌。 使用不记名令牌不需要持票人证明拥有加密密钥材料（占有证明）。
+
+它需要由[OAuth2.0的授权框架规格](http://self-issued.info/docs/draft-ietf-oauth-v2-bearer.html#authz-header)中指定要被发送到Prisma API。
+
+当发送在/由HTTP定义的授权请求报头字段1.1 [RFC2617]的访问令牌，客户端使用的`Bearer`认证方案来发送访问令牌。
+
+_例如:_
+
+<Code>{`
+GET /resource HTTP/1.1
+Host: server.example.com
+Authorization: Bearer mF_9.B5f-4.1JqM
+`}</Code>
+
+此方案的Authorization标头字段的语法遵循[RFC2617]第2节中定义的Basic方案的使用。 请注意，与Basic一样，它不符合[RFC2617]第1.2节中定义的通用语法，但与为HTTP 1.1 [HTTP-AUTH]开发的通用身份验证框架兼容，尽管它不遵循首选实践 其中概述的是为了反映现有的部署。 Bearer凭证的语法如下：
+
+<Code>{`
+b64token    = 1*( ALPHA / DIGIT /
+                   "-" / "." / "_" / "~" / "+" / "/" ) *"="
+credentials = "Bearer" 1*SP b64token
+Clients SHOULD make authenticated requests with a bearer token using the \`Authorization\` request header field with the \`Bearer\` HTTP authorization scheme. Resource servers MUST support this method.
+`}</Code>
+
+
+#### 例:保护你的Prisma API
+
+下面是一个例子，如何保护你的Prisma API，使对请求身份验证。
+
+##### 未受保护的Prisma API
+
+假设你开始通过以下服务配置配置一个新的Prisma services:
+
+**`datamodel.prisma` **
+
+<Code lang="graphql">{`
+type User {
+  id: ID! @unique
+  name: String!
+}
+`}</Code>
+
+****prisma.yml
+
+<Code lang="yaml">{`
+endpoint: https://eu1.prisma.sh/john-doe/demo/dev # deployed to a Prisma Demo server 
+datamodel: datamodel.prisma
+`}</Code>
+
+在这个例子中，假设该服务被部署到一个演示服务器，因此可在公共互联网上。
+
+当使用上述服务配置部署服务时，知道服务端点的每个人都能够向其API发送查询和Mutation，这意味着他们可以有效地对你的数据库执行任意读取和写入：
+
+<Code>{`
+curl 'https://eu1.prisma.sh/jane-doe/demo/dev' \\
+-H 'Content-Type: application/json' \\
+--data-binary '{"query":"mutation { createUser(data: { name: \"Sarah\" }) { id }}"}'
+`}</Code>
+
+当使用GraphQL Playground，需要跟Prisma API请求时不需要对HTTP头进行设置。
+
+##### 保护Prisma API
+
+你需要为了你的Prisma API做的唯一的事情是在prisma.yml设置服务密码:
+
+<Code lang="yaml">{`
+endpoint: https://eu1.prisma.sh/john-doe/demo/dev # deployed to a Prisma Demo server 
+datamodel: datamodel.prisma
+secret: my-secret-42
+`}</Code>
+
+要应用此更改，你还需要重新部署服务:
+
+<Code>{`
+prisma deploy
+`}</Code>
+
+如果你现在正在试图使用`curl`重新发送上述HTTP请求:
+
+<Code>{`
+curl 'https://eu1.prisma.sh/jane-doe/demo/dev' \\
+-H 'Content-Type: application/json' \\
+--data-binary '{"query":"mutation { createUser(data: { name: \"Sarah\" }) { id }}"}'
+`}</Code>
+
+你会收到以下错误:
+
+<Code lang="json">{`
+{
+  "errors" : [ {
+    "message" : "Your token is invalid. It might have expired or you might be using a token from a different project.",
+    "code" : 3015,
+    "requestId" : "eu1:api:cjk28t8e55tld0b296sr2ey6v"
+  } ]
+}⏎
+`}</Code>
+
+对于针对Prisma API发出的所有请求，无论是请求的查询，Mutation还是订阅，都会发生这种情况。 如果在GraphQL Playground中未设置HTTP标头，请求将失败并显示相同的错误消息：
+
+![](https://i.imgur.com/P8wtcSU.png)
+
+要解决此问题，你需要在HTTP请求的Authorization标头字段中包含服务标记。 你可以使用Prisma CLI获取服务令牌：
+
+<Code>{`
+prisma token
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkYXRhIjp7InNlcnZpY2UiOiJkZW1vQGRldiIsInJvbGVzIjpbImFkbWluIl19LCJpYXQiOjE1MzI1MzAyMDgsImV4cCI6MTUzMzEzNTAwOH0.FM6haUilhi89-C-2h7asV3-Ot6NQrs1qoaKL-wPjj04
+`}</Code>
+
+CLI打印的令牌需要在Authorization标头字段中设置，并以Bearer为前缀：
+
+<Code>{`
+curl 'https://eu1.prisma.sh/jane-doe/demo/dev' \\
+-H 'Content-Type: application/json' \\
+-H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkYXRhIjp7InNlcnZpY2UiOiJkZW1vQGRldiIsInJvbGVzIjpbImFkbWluIl19LCJpYXQiOjE1MzI1MzAyMDgsImV4cCI6MTUzMzEzNTAwOH0.FM6haUilhi89-c-2h7asV3-Ot6NQrs1qoaKL-wPjj04' \\
+--data-binary '{"query":"mutation { createUser(data: { name: \"Sarah\" }) { id }}"}'
+`}</Code>
+
+同样地，在GraphQL Playground，你需要(JSON格式)在左下角的**HTTP header**窗格设置它:
+
+<Code lang="json">{`
+{
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkYXRhIjp7InNlcnZpY2UiOiJkZW1vQGRldiIsInJvbGVzIjpbImFkbWluIl19LCJpYXQiOjE1MzI1MzAyMDgsImV4cCI6MTUzMzEzNTAwOH0.FM6haUilhi89-c-2h7asV3-Ot6NQrs1qoaKL-wPjj04M"
+}
+`}</Code>
+
+如果你使用了`PRISMA playground`命令打开Playground上，Prisma的CLI自动注入了一个有效的服务标识`Authorization`头。
+
+![](https://i.imgur.com/xBkBn9X.png)
+
+
+
+### Queries
+
+#### 如何生成Prisma API中的`query`？
+
+一个Prisma services的GraphQL API在Prisma的GraphQL schema中指定。Prisma GraphQL schema是基于数据模型自动生成的:
+
+![](https://i.imgur.com/jHkNjKU.png)
+
+在`Query`类型Prisma的GraphQL schema定义了所有的Prisma API接受查询。
+
+作为一个例子，考虑下面的数据模型:
+
+<Code lang="graphql">{`
+type User {
+  id: ID! @unique
+  name: String!
+}
+`}</Code>
+
+这是Prisma会自动生成的`Query`的type:
+
+<Code lang="graphql">{`
+type Query {
+  users(where: UserWhereInput, orderBy: UserOrderByInput, skip: Int, after: String, before: String, first: Int, last: Int): [User]!
+  user(where: UserWhereUniqueInput!): User
+  usersConnection(where: UserWhereInput, orderBy: UserOrderByInput, skip: Int, after: String, before: String, first: Int, last: Int): UserConnection!
+}
+`}</Code>
+
+对于datamodel中的每种类型，都会生成三个查询。 以上面的“User”类型为例，这些查询是：
+
+- `user`:检索单个`User`节点
+- `users`:检索`User`节点列表(作为一个对象查询)
+- `usersConnection`:检索`User`节点列表(作为聚合查询)
+
+要详细检查你的Prisma API的所有可用的操作，你可以读取Prisma services的GraphQL schema。它可以用[GraphQL CLI](https://github.com/graphql-cli/graphql-cli)下载:
+
+<Code>{`
+graphql get-schema --endpoint __YOUR_PRISMA_ENDPOINT__ --output prisma.graphql --no-all
+`}</Code>
+
+了解Prisma API具体功能的另一种方法是探索GraphQL Playground中自动生成的API文档。 你可以通过单击Playground右边缘的绿色** SCHEMA ** - 按钮来执行此操作：
+
+![](https://i.imgur.com/XdVy80I.png)
+
+#### 本页数据模型例子
+
+本节的所有示例查询基于此数据模型配置Prisma services:
+
+<Code lang="graphql">{`
+type Post {
+  id: ID! @unique
+  title: String!
+  published: Boolean!
+  author: User!
+}
+type User {
+  id: ID! @unique
+  age: Int
+  email: String! @unique
+  name: String!
+  accessRole: AccessRole
+  posts: [Post!]!
+}
+enum AccessRole {
+  USER
+  ADMIN
+}
+`}</Code>
+
+
+### Query查询的概念
+
+Prisma API提供两种查询:
+
+* **对象查询**:获取特定对象类型的单个或多个节点。
+* **聚合查询**:公开聚合和“Relay”兼容连接等高级功能，实现强大的分页模型。
+
+下面的概念也得记住有用:
+
+* **分层（或嵌套）查询**：跨关系获取数据。
+* **查询参数**:允许筛选，排序，分页等。
+
+### 对象查询
+
+我们可以使用对象查询来获取无论是**单个节点**，或某个对象类型节点的**列表**。
+
+在这里，我们使用`posts`查询来获取`POST`节点列表。在响应中，我们只包括`id`和每个POST节点的`title`:
+
+<Code lang="graphql">{`
+query {
+  posts {
+    id
+    title
+  }
+}
+`}</Code>
+
+我们也可以查询特定`POST`节点。请注意，我们使用了`where`参数选择节点:
+
+<Code lang="graphql">{`
+query {
+  post(where: {
+    id: "cixnen24p33lo0143bexvr52n"
+  }) {
+    id
+    title
+    published
+  }
+}
+`}</Code>
+
+因为`User`是在我们的数据模型另一种类型，`users`是另一种可用的查询。同样，我们可以使用`where`参数指定返回的用户条件。在这个例子中，我们筛选出`age`比`18`更高的所有`User`节点:
+
+<Code lang="graphql">{`
+query {
+  users(where: {
+    age_gt: 18
+  }) {
+    id
+    name
+  }
+}
+`}</Code>
+
+这也适用于跨关系。在这里，我们要提取那些节点中`age`比`18`更高的`author`的`POST`:
+
+<Code lang="graphql">{`
+query {
+  posts(where: {
+    author: {
+      age_gt: 18
+    }
+  }) {
+    id
+    title
+    author {
+      name
+      age
+    }
+  }
+}
+`}</Code>
+
+### 聚合查询
+
+对象查询直接返回节点列表。在特殊情况下，或者使用高级功能时，使用**聚合查询**是较好的选择。它们的附加信息(完全符合)[Relay connections](https://facebook.github.io/relay/graphql/connections.htm)。
+
+Relay connections的核心思想是提供关于在数据图中的_edges_元信息。例如，每个edge不仅具有关于对应的对象访问信息(`node`)，而且还有`cursor`，允许实现强大的[基于指针的分页](https://graphql.org/learn/pagination/#complete-connection-model)。
+
+在这里，我们撷取了使用`postsConnection`查询所有`POST`节点。请注意，我们还要求每个edge附带`cursor`:
+
+<Code lang="graphql">{`
+# Fetch all posts
+query {
+  postsConnection {
+    edges {
+      cursor
+      node {
+        id
+        title
+      }
+    }
+  }
+}
+`}</Code>
+
+聚合查询还通过字段公开聚合功能aggregate：
+
+<Code lang="graphql">{`
+#含有"GraphQL"标题的所有帖子
+query {
+  postsConnection(where: {
+    title_contains: "GraphQL"
+  }) {
+    aggregate {
+      count
+    }
+  }
+}
+`}</Code>
+
+> 更多聚合将随时间被添加。找到[这里]路线图的更多信息(https://github.com/prisma/prismagraphql/issues/1312)。
+
+### 跨关系查询数据
+
+数据模型中的每个可用关系都会为其连接的两个模型的查询添加一个新字段。
+
+在这里，我们取一个特定的`User`节点，并使用`posts`获取与其相关的全部`POST`节点:
+
+<Code lang="graphql">{`
+query {
+  user(where: {
+    id: "cixnekqnu2ify0134ekw4pox8"
+  }) {
+    id
+    name
+    posts {
+      id
+      published
+    }
+  }
+}
+`}</Code>
+
+`user.posts`行为与`posts`查询相同，因为它允许你指定你感兴趣的Post类型的字段。
+
+### 查询参数
+
+在整个Prisma API中，你将找到可以提供的查询参数，以进一步控制查询响应。它可以是以下任何一种：
+
+-  **Ordering**排序:使用`orderBy`对任何字段值排序节点
+-  **Filtering**过滤:使用标量或关系过滤器选择查询中的节点`where`
+-  **Pagination**分页:使用`first`和`before`，`last`和`after`，和在查询节点切片`skip`
+
+这些查询参数可以结合起来，实现非常具体的查询响应。
+
+#### 排序
+
+查询的所有节点可以提供`orderBy`参数的类型的每个字段:`ORDERBY:<字段> _ASC`或`ORDERBY:<字段> _DESC`。
+
+**按title正序排序所有Post节点的列表:**
+
+<Code lang="graphql">{`
+query {
+  posts(orderBy: title_ASC) {
+    id
+    title
+    published
+  }
+}
+`}</Code>
+
+**按published倒序排序所有Post节点的列表:**
+
+<Code lang="graphql">{`
+query {
+  posts(orderBy: published_DESC) {
+    id
+    title
+    published
+  }
+}
+`}</Code>
+
+不必在实际查询中选择要排序的字段。如果未指定排序，则会按id字段自动按顺序排序响应。
+
+**注意**
+
+这是目前无法排序的[多个字段](https://github.com/prismagraphql/feature-requests/issues/62)
+
+
+#### 过滤
+
+当查询类型的所有节点上，你可以提供不同的参数给`where`参数根据你的要求来约束数据。可用选项取决于在相关类型上定义的标量和关系字段。
+
+##### 应用单一过滤器
+
+如果只为参数提供一个参数where，则查询响应将仅包含符合此约束的节点。可以使用AND/OR组合多个过滤器，有关详细信息，请参见下文。
+
+###### 通过一个具体的值过滤
+
+筛选查询响应的最简单方法是为要筛选的特定字段提供具体值。
+
+查询尚未`published`的 **所有`POST`节点:**
+
+<Code lang="graphql">{`
+query {
+  posts(where: {
+    published: false
+  }) {
+    id
+    title
+    published
+  }
+}
+`}</Code>
+
+**查询所有`User`节点特定的`name`:**
+
+<Code lang="graphql">{`
+query {
+  users(where: {
+    name: "Alice"
+  }) {
+    id
+  }
+}
+`}</Code>
+
+**查询所有具有特定`age` 的`User`节点:**
+
+<Code lang="graphql">{`
+query {
+  users(where: {
+    age: 30
+  }) {
+    id
+  }
+}
+`}</Code>
+
+###### 高级过滤条件
+
+根据要筛选的字段类型，你可以访问可用于筛选查询响应的不同高级条件。
+
+**查询所有`POST`节点，其`title`是一个指定的字符串:**
+
+<Code lang="graphql">{`
+query {
+  posts(where: {
+    title_in: ["My biggest Adventure", "My latest Hobbies"]
+  }) {
+    id
+    title
+    published
+  }
+}
+`}</Code>
+
+**查询所有`User`节点，其`age`小于42 **:
+
+<Code lang="graphql">{`
+query {
+  users(where: {
+    age_lt: 42
+  }) {
+    id
+  }
+}
+`}</Code>
+
+##### 关系过滤器
+
+对于一对一关系，你可以通过嵌入相应的参数来定义相关节点上的条件where。
+
+**查询其中`author`有`USER`访问角色的所有`POST`节点:**
+
+<Code lang="graphql">{`
+query {
+  posts(where: {
+    author: {
+      accessRole: USER
+    }
+  }) {
+    title
+  }
+}
+`}</Code>
+
+对于_一对多_关系，另外三个参数可用:`every`，`some`和`none`，定义的条件应符合`every`，`some`或`none`相关节点。
+
+查询至少有一个Post 节点published的所有User节点：
+
+<Code lang="graphql">{`
+query {
+  users(where: {
+    posts_some: {
+      published: true
+    }
+  }) {
+    id
+    posts {
+      published
+    }
+  }
+}
+`}</Code>
+
+对于一对一或多对多关系的嵌套参数中也可以使用关系过滤器。
+
+**查询_like_的`author`不是`ADMIN`访问角色的`POST`所有`User`节点:**
+
+<Code lang="graphql">{`
+query {
+  users(where: {
+    likedPosts_none: {
+      author: {
+        accessRole: ADMIN
+      }
+    }
+  }) {
+    name
+  }
+}
+`}</Code>
+
+> `likedPosts`不是上述数据模型的一部分，但可以很容易地通过将相应字段添加到`User`:`likedPosts: [Post!]! @relation(name: "LikedPosts")`。我们还提供了一个name关系来解决我们原本会创建的歧义，因为有两个关系字段针对Post该User类型。
+
+
+##### 结合使用多种过滤器
+
+你可以使用过滤器组合程序`OR``AND`和`NOT`创建的过滤条件的任意逻辑组合:
+
+- 对于要评估为“true”的`AND`过滤器，_all_嵌套条件必须为“true”。
+- 对于要评估为“true”的“OR”过滤器，_至少有一个_嵌套条件必须为“true”。
+- 对于要评估为“true”的`NOT`过滤器，_所有_嵌套条件都必须为“false”。
+
+###### 使用`OR``AND`和 `NOT`
+
+让我们先从一个简单的例子:
+
+**查询`published` 和其`title`是一个字符串的给定列表中的所有`POST`节点:**
+
+<Code lang="graphql">{`
+query {
+  posts(where: {
+    AND: [{
+      title_in: ["My biggest Adventure", "My latest Hobbies"]
+    }, {
+      published: true
+    }]
+  }) {
+    id
+    title
+    published
+  }
+}
+`}</Code>
+
+`OR`，`AND`和`NOT`每个接受一个_list_作为输入，其中每个列表项是一个对象，因此需要用大括号包裹。从上述查询的样品过滤器条件包含两个滤波器对象:
+
+- `{title_in: ["My biggest Adventure", "My latest Hobbies"]}`
+- `{published: true}`
+
+只有当针对`POST`节点这两个过滤条件符合时，该节点将被包含在响应。
+
+###### `AND`，`OR`和`NOT`过滤器任意组合
+
+你可以组合甚至嵌套过滤器组合器AND，OR并NOT创建过滤条件的任意逻辑组合。
+
+**在提供的列表中的所有`POST`节点查询要么`published` 和其`title`是在给定的字符串，或者有具体的`id`:**
+
+<Code lang="graphql">{`
+query {
+  posts(where: {
+    OR: [{
+      AND: [{
+        title_in: ["My biggest Adventure", "My latest Hobbies"]
+      }, {
+        published: true
+      }]
+    }, {
+      id: "cixnen24p33lo0143bexvr52n"
+    }]
+  }) {
+    id
+    title
+    published
+  }
+}
+`}</Code>
+
+注意我们如何将AND组合嵌套在OR组合器中。
+
+##### 局限性
+
+目前，[**标量列表过滤器**](https://github.com/prismagraphql/feature-requests/issues/60)[**JSON滤波器**](https://github.com/prismagraphql/功能请求/问题/148)不可用。加入GitHub相应功能的讨论。
+
+### 分页
+
+当查询的特定对象类型的所有节点，可以提供参数，让你进行分页查询响应。
+
+#### 用`first`和`last`实现从前往后查询和从后往前查询
+
+分页允许你请求一定数量的节点。 你可以通过节点向前或向后搜索并提供可选的起始节点：
+
+- **从前往后查询**，用`first`; 指定起始节点用`after`。
+- **从后往前查询**，使用`last`; 指定起始节点用`before`。
+
+你不能把`first`和`before`或`last`和`after`结合起来。 如果你在查询中这样做，`before`或`after`将被简单地忽略，只应用`first`或`last`（在列表的开头或结尾，取决于你使用的是哪一个）。
+
+请注意，当你只有5条数据时，你可以查询更多比如10条数据，也不会有错误消息。
+
+#### 跳过`skip`
+
+你还可以通过提供`skip`参数跳过任意方向的任意数量的节点：
+
+- 当使用`first`时，`skip`会跳过列表开头的元素
+- 当使用`last`时，`skip`跳过列表末尾的元素
+
+#### 例子
+
+对于下面的例子，我们假设有三十条数据:
+
+![](https://i.imgur.com/Xh6Qjts.png)
+
+**查询前3个节点(从前往后):**
+
+![](https://i.imgur.com/O1Jj3Z2.png)
+
+<Code lang="graphql">{`
+query {
+  posts(first: 3) {
+    id
+    title
+  }
+}
+`}</Code>
+
+**从第6条数据开始，取5条数据(从前往后):**
+
+![](https://i.imgur.com/PpI5X0X.png)
+
+<Code lang="graphql">{`
+query {
+  posts(
+    first: 5
+    skip: 5
+  ) {
+    id
+    title
+  }
+}
+`}</Code>
+
+**查询的最后3个节点(从后往前)**:
+
+![](https://i.imgur.com/pkuYCrV.png)
+
+<Code lang="graphql">{`
+query {
+  posts(last: 3) {
+    id
+    title
+  }
+}
+`}</Code>
+
+**从倒数第4条数据取到倒数第10条(寻从后往前):**
+
+![](https://i.imgur.com/iSl9Y07.png)
+
+<Code lang="graphql">{`
+query {
+  posts(
+    last: 7
+    skip: 3
+  ) {
+    id
+    title
+  }
+}
+`}</Code>
+
+**查询id为`cixnen24p33lo0143bexvr52n`的后面3个数据:**
+
+![](https://i.imgur.com/InYSSkQ.png)
+
+<Code lang="graphql">{`
+query {
+  posts(
+    first: 3
+    after: "cixnen24p33lo0143bexvr52n"
+  ) {
+    id
+    title
+  }
+}
+`}</Code>
+
+**查询id为`cixnen24p33lo0143bexvr52n`的数据再跳过3条，取5个:**
+
+![](https://i.imgur.com/u4WEAJv.png)
+
+<Code lang="graphql">{`
+query {
+  posts(
+    first: 5
+    after: "cixnen24p33lo0143bexvr52n"
+    skip: 3
+  ) {
+    id
+    title
+  }
+}
+`}</Code>
+
+**`cixnen24p33lo0143bexvr52n`当id的那条数据的前面5条:**
+
+![](https://i.imgur.com/306eghw.png)
+
+<Code lang="graphql">{`
+query {
+  posts(
+    last: 5
+    before: "cixnen24p33lo0143bexvr52n"
+  ) {
+    id
+    title
+  }
+}
+`}</Code>
+
+**`cixnen24p33lo0143bexvr52n`当id的那条数据的前面5条数据略过，再取3个:**
+
+![](https://i.imgur.com/iZGUiHJ.png)
+
+<Code lang="graphql">{`
+query {
+  posts(
+    last: 3
+    before: "cixnen24p33lo0143bexvr52n"
+    skip: 5
+  ) {
+    id
+    title
+  }
+}
+`}</Code>
+
+### Mutations
+
+#### 如何生成Prisma API中的`mutation`？
+
+一个Prisma services的GraphQL API在Prisma的GraphQL schema中指定。Prisma GraphQL schema是基于数据模型自动生成的:
+
+![](https://i.imgur.com/jHkNjKU.png)
+
+Prisma GraphQL schema中的`Mutation`类型中定义了所有的Prisma API接受的Mutation。
+
+作为一个例子，考虑下面的数据模型:
+
+<Code lang="graphql">{`
+type User {
+  id: ID! @unique
+  name: String!
+}
+`}</Code>
+
+这是Prisma会自动生成的`Mutation`:
+
+<Code lang="graphql">{`
+type Mutation {
+  createUser(data: UserCreateInput!): User!
+  updateUser(data: UserUpdateInput!, where: UserWhereUniqueInput!): User
+  deleteUser(where: UserWhereUniqueInput!): User
+  upsertUser(where: UserWhereUniqueInput!, create: UserCreateInput!, update: UserUpdateInput!): User!
+  updateManyUsers(data: UserUpdateInput!, where: UserWhereInput!): BatchPayload!
+  deleteManyUsers(where: UserWhereInput!): BatchPayload!
+}
+`}</Code>
+
+对于你的数据模型每一种type，都形成了6个Mutation。以上述`User`类型作为示例，这些Mutation是:
+
+- `createUser`:创建一个新的`User`节点
+- `updateUser`:更新现有`User`节点
+- `deleteUser`:删除现有`User`节点
+- `upsertUser`:更新现有`User`节点; 如果它不存在，创建一个新的`User`节点
+- `updateManyUsers`:更新很多`User`节点
+- `deleteManyUsers`:一次性删除很多`User`节点
+
+要详细检查你的Prisma API的所有可用的操作，你可以读取Prisma services 中的Prisma GraphQL schema。它可以用[GraphQL CLI](https://github.com/graphql-cli/graphql-cli)下载:
+
+<Code>{`
+graphql get-schema --endpoint __YOUR_PRISMA_ENDPOINT__ --output prisma.graphql --no-all
+`}</Code>
+
+了解你的Prisma API的具体能力的另一种方式是通过打开GraphQL Playground内自动生成的API文档。你可以通过点击在Playground的右边按钮**SCHEMA**:
+
+![](https://i.imgur.com/ArteAJQ.png)
+
+
+#### 数据模型本页例子
+
+本节的所有Mutation例子基于这个数据模型的Prisma services:
+
+<Code lang="graphql">{`
+type Post {
+  id: ID! @unique
+  title: String!
+  published: Boolean! @default(value: "false")
+  author: User
+}
+type User {
+  id: ID! @unique
+  age: Int
+  email: String! @unique
+  name: String!
+  posts: [Post!]!
+}
+`}</Code>
+
+
+### Mutation概念
+
+Prisma API提供了三种Mutation:
+
+-  **对象Mutation**:创建，更新，更新插入或删除某[对象类型]的单个节点。
+-  **嵌套Mutation**:创建，更新，更新插入，删除，连接，断开连接两个或多个相关类型的多个节点。
+-  **批量Mutation**:更新和删除[对象类型]的许多节点。
+
+当使用Prisma API时，下面的概念也记住有用:
+
+-  **Relation Mutation**:连接和断开两个节点的关系(这是通过嵌套Mutation完成)。
+-  **Input types**:Prisma API遵循GraphQL Mutation设计的最佳实践，并从'data`这个单个对象中接受Mutation参数。
+
+### 对象Mutation
+
+你可以使用对象Mutation来修改特定模型的单个节点。
+
+#### 创建节点
+
+你可以使用`create`Mutation创建新的节点。这些Mutation采用一个称为`data`的输入对象包裹所有_必填字段_相应类型的字段。
+
+**创建一个新的`User`节点:**
+
+<Code lang="graphql">{`
+mutation {
+  createUser(
+    data: {
+      age: 42
+      email: "alice@prisma.io"
+      name: "Alice"
+    }
+  ) {
+    id
+    name
+  }
+}
+`}</Code>
+
+#### 更新节点
+
+你可以使用`update`Mutation改变一个节点的一个或多个字段值。要更新的节点[选择]使用`where`参数，经由`data`参数提供新的值。节点可以通过`@unique`指令标注的任何字段进行选择。
+
+**更改`User`节点的`name`:**
+
+<Code lang="graphql">{`
+mutation {
+  updateUser(
+    data: {
+      name: "Alice"
+    }
+    where: {
+      id: "cjcdi63j80adw0146z7r59bn5"
+    }
+  ) {
+    id
+    name
+  }
+}
+`}</Code>
+
+**通过其`email`标识更改`User`节点的`name`:**
+
+<Code lang="graphql">{`
+mutation {
+  updateUser(
+    data: {
+      name: "Alice"
+    }
+    where: {
+      email: "alice@prisma.io"
+    }
+  ) {
+    id
+    name
+  }
+}
+`}</Code>
+
+####  Upserting节点
+
+当你想要么更新现有的节点，要么创建一个新的节点，你可以使用_upsert_Mutation。
+
+**根据`email`更新`User`，如果没有该`User`则创建一个新的`User`**:
+
+<Code lang="graphql">{`
+mutation {
+  upsertUser(
+    where: {
+      email: "alice@prisma.io"
+    }
+    create: {
+      email: "alice@prisma.io"
+      age: 42
+      name: "Alice"
+    }
+    update: {
+      age: 42
+    }
+  ) {
+    name
+  }
+}
+`}</Code>
+
+#### 删除节点
+
+要删除节点，需要先选择节点，在`delete`Mutation中使用`where`参数。
+
+**通过`id`删除`User`节点:**
+
+<Code lang="graphql">{`
+mutation {
+  deleteUser(where: {
+    id: "cjcdi63l20adx0146vg20j1ck"
+  }) {
+    id
+    name
+    email
+  }
+}
+`}</Code>
+
+**通过`email`删除`User`节点:**
+
+<Code lang="graphql">{`
+mutation {
+  deleteUser(where: {
+    email: "cjcdi63l20adx0146vg20j1ck"
+  }) {
+    id
+    name
+    email
+  }
+}
+`}</Code>
+
+### 嵌套Mutation
+
+你可以在使用`create`和`update`Mutation的同时修改整个关系的节点。这被称为嵌套**Mutation**，其执行方式为[事务]。
+
+嵌套Mutation:
+
+- `create`
+- `update`
+- `upsert`
+- `delete`
+- `connect`
+- `disconnect`
+
+我们提供一系列例子，罗列出所有可能出现的情况。
+
+我们建议使用[GraphQL Playground](https://github.com/prismagraphql/graphql-playground)尝试不同的嵌套Mutation的行为。
+
+#### 创建和连接相关节点
+
+你可以使用嵌套输入对象字段内的`connect`Mutation连接到一个或多个相关的节点。
+
+**创建一个新的`POST`节点，并通过唯一`email`字段将其连接到现有的`User`节点:**
+
+<Code lang="graphql">{`
+mutation {
+  createPost(data: {
+    title: "This is a draft"
+    author: {
+      connect: {
+        email: "alice@prisma.io"
+      }
+    }
+  }) {
+    id
+    author {
+      name
+    }
+  }
+}
+`}</Code>
+
+如果你在`author`中提供`create`参数，而不是`connect`，你会_create_一个新的`User`节点，同时新的`POST`节点将连接到它:
+
+<Code lang="graphql">{`
+mutation {
+  createPost(data: {
+    title: "This is a draft"
+    author: {
+      create: {
+        name: "Bob"
+        email: "bob@prisma.io"
+        age: 42
+      }
+    }
+  }) {
+    id
+    author {
+      name
+    }
+  }
+}
+`}</Code>
+
+当使用`createUser`而不是`createPost`Mutation，实际上你可以同时创建并连接到多个'POST`节点，因为`User`和`POST`有_一对多_关系。
+
+**创建一个新的`User`节点，并直接将其连接到几个新创建的`POST`节点:**
+
+<Code lang="graphql">{`
+mutation {
+  createUser(
+    data: {
+      name: "Bob"
+      email: "bob@prisma.io"
+      age: 42
+      posts: {
+        create: [
+          {
+            published: true
+            title: "Hello World"
+          },
+          {
+            title: "GraphQL is great"
+          }
+        ]
+      }
+    }
+  ) {
+    id
+    posts {
+      id
+    }
+  }
+}
+`}</Code>
+
+**创建一个新的`User`节点，并直接将其连接到几个新创建的和现有的`POST`节点:**
+
+<Code lang="graphql">{`
+mutation {
+  createUser(
+    data: {
+      name: "Bob"
+      email: "bob@prisma.io"
+      age: 42
+      posts: {
+        create: [
+          {
+            published: true
+            title: "Hello World"
+          },
+          {
+            title: "GraphQL is great"
+          }
+        ]
+        connect: [
+          {
+            id: "cjcdi63j80adw0146z7r59bn5"
+          }, {
+            id: "cjcdi63l80ady014658ud1u02"
+          }
+        ]
+      }
+    }
+  ) {
+    id
+    posts {
+      id
+    }
+  }
+}
+`}</Code>
+
+#### Updating和upserting关系节点
+
+当更新的节点时，可以同时更新一个或多个关系的节点。
+
+**更新属于某一`User`节点的`POST`节点的`title`:**
+
+<Code lang="graphql">{`
+mutation {
+  updateUser(
+    data: {
+      posts: {
+        update: [
+          {
+            where: {
+              id: "cjcf1cj0r017z014605713ym0"
+            }
+            data: {
+              title: "Hello World"
+            }
+          }
+        ]
+      }
+    }
+    where: {
+      id: "cjcf1cj0c017y01461c6enbfe"
+    }
+  ) {
+    id
+    posts {
+      id
+    }
+  }
+}
+`}</Code>
+
+`update`接受列表数据并以`where`和`data`字段的参数更新相关字段。
+
+**更新某个`POST`节点让它连接到现有`User`节点的name，如果没有就创建新`User`节点:**
+
+嵌套upserting工作方式类似:
+
+<Code lang="graphql">{`
+mutation {
+  updatePost(
+    where: {
+      id: "cjcf1cj0r017z014605713ym0"
+    }
+    data: {
+      author: {
+        upsert: {
+          where: {
+            id: "cjcf1cj0c017y01461c6enbfe"
+          }
+          update: {
+            id: "cjcdi63l80ady014658ud1u02"
+            name: "Alice"
+          }
+          create: {
+            email: "alice@prisma.io"
+            name: "Alice"
+            age: 42
+          }
+        }
+      }
+    }
+  ) {
+    id
+    author {
+      id
+    }
+  }
+}
+`}</Code>
+
+**从`User`节点断开一个`POST`节点**:
+
+<Code lang="graphql">{`
+mutation {
+  updateUser(
+    where: {
+      id: "cjcf1cj0c017y01461c6enbfe"
+    }
+    data: {
+      posts: {
+        disconnect: [
+          { id: "cjcdi63l80ady014658ud1u02" }
+        ]
+      }
+    }
+  ) {
+    id
+    posts {
+      id
+    }
+  }
+}
+`}</Code>
+
+#### 删除相关节点
+
+当更新的节点时，你可以在同时删除一个或多个相关节点。
+
+**删除属于某`User`节点的`POST`节点:**
+
+<Code lang="graphql">{`
+mutation {
+  updateUser(
+    data: {
+      posts: {
+        delete: [
+          {
+            id: "cjcf1cj0u01800146jii8h8ch"
+          },
+          {
+            id: "cjcf1cj0u01810146m84cnt34"
+          }
+        ]
+      }
+    }
+    where: {
+      id: "cjcf1cj0c017y01461c6enbfe"
+    }
+  ) {
+    id
+  }
+}
+`}</Code>
+
+
+### scalar list Mutation
+
+当对象类型的字段具有标量列表作为其类型时，可以使用许多特殊的Mutation。
+
+在下面的数据模型，`User`类型有三个这样的字段:
+
+<Code lang="graphql">{`
+type User {
+  id: ID! @unique
+  scores: [Int!]!         # scalar list for integers
+  friends: [String!]!     # scalar list for strings
+  coinFlips: [Boolean!]!  # scalar list for booleans
+}
+`}</Code>
+
+#### 创建节点
+
+当创建`User`的一个新的节点，可以使用`set`提供用于每个标量字段的值的列表。
+
+**创建一个新的`User`并设置`scores`，`friends`和`coinFlips`值:**
+
+<Code lang="graphql">{`
+mutation {
+  createUser(data: {
+    scores: { set: [1, 2, 3] }
+    friends: { set: ["Sarah", "Jane"] }
+    throws: { set: [false, false] }
+  }) {
+    id
+  }
+}
+`}</Code>
+
+#### 更新节点
+
+当更新类型的现有节点`User`，可以在标量列表字段中进行许多附加操作(如`scores: [Int!]!`!):
+
+- `set`:用全新的列表覆盖现有的列表。
+- `push`(即将推出):在列表中的任意位置添加一个或多个元素。
+- `pop`(即将推出):删除列表开头或末尾的一个或多个元素。
+- `remove`(即将推出):删除列表中匹配给定过滤器的所有元素。
+
+> `push`，`pop`和`remove`尚未实现。如果你感兴趣，你可以在[这里预览](https://github.com/prisma/prisma/issues/1275)。
+
+Each scalar list field takes an object with a `set` field in an `update` mutation. The value of that field is a single value _or_ a list of the corresponding scalar type.
+
+**设置现有`User`节点的`scores`到`[1]`:**
+
+<Code lang="graphql">{`
+mutation {
+  updateUser(
+    where: {
+      id: "cjd4lfdyww0h00144zst9alur"
+    }
+    data: {
+      scores: {
+        set: 1
+      }
+    }
+  ) {
+    id
+  }
+}
+`}</Code>
+
+**设置现有`User`节点的`scores`到`[10,20,30]`:**
+
+<Code lang="graphql">{`
+mutation {
+  updateUser(
+    where: {
+      id: "cjd4lfdyww0h00144zst9alur"
+    }
+    data: {
+      scores: {
+        set: [10,20,30]
+      }
+    }
+  ) {
+    id
+  }
+}
+`}</Code>
+
+
+### 批量Mutation
+
+批量Mutation可用于一次更新或删除多个节点。返回的数据只包含受影响的节点的`count`。
+
+**注意**
+
+批量Mutation****不适用于[Subscriptions]事件!
+
+对于许多更新的节点，你可以使用`where`参数选择受影响的节点，而用'data`输入新的值。所有节点都将更新为相同的值。
+
+**设置在创建于2017年的所有未发表的'POST`节点`published`字段为TRUE:**
+
+<Code lang="graphql">{`
+Mutation{
+mutation {
+  updateManyPosts(
+    where: {
+      createdAt_gte: "2017"
+      createdAt_lt: "2018"
+      published: false
+    }
+    data: {
+      published: true
+    }
+  ) {
+    count
+  }
+}
+`}</Code>
+
+**删除其中`author`的`name`是`Alice`的所有未发布`POST`节点:**
+
+<Code lang="graphql">{`
+mutation {
+  deleteManyPosts(
+    where: {
+      published: false
+      author: {
+        name: "Alice"
+      }
+    }
+  ) {
+    count
+  }
+}
+`}</Code>
+
+### Subscriptions
+
+#### Prisma API中的Subscriptions如何生成？
+
+一个Prisma services的GraphQL API在Prisma的GraphQL schema中指定。Prisma GraphQL schema是基于数据模型自动生成的:
+
+![](https://i.imgur.com/jHkNjKU.png)
+
+Prisma GraphQL schema中的`Subscription`type定义了所有的Prisma API接受的subscription。
+
+作为一个例子，考虑下面的数据模型:
+
+<Code lang="graphql">{`
+type User {
+  id: ID! @unique
+  name: String!
+}
+`}</Code>
+
+这是Prisma会生成的`Subscription`type:
+
+<Code lang="graphql">{`
+type Subscription {
+  user(where: UserSubscriptionWhereInput): UserSubscriptionPayload
+}
+`}</Code>
+
+对于你的数据模型每一个类型，生成一个Subscriptions。以上述`User`type为例，此Subscriptions是:
+
+ - `user`:每当创建，更新或删除User节点时触发。(除[批量Mutation]时)。
+
+要详细检查你的Prisma API的所有可用的操作，你可以读取Prisma services Prisma的GraphQL schema。它可以用[GraphQL CLI](https://github.com/graphql-cli/graphql-cli)下载:
+
+<Code>{`
+graphql get-schema --endpoint __YOUR_PRISMA_ENDPOINT__ --output prisma.graphql --no-all
+`}</Code>
+
+了解你的Prisma API的具体能力的另一种方式是通过查看GraphQL Playground内自动生成的API文档。你可以通过点击在Playground的右边按钮链接**SCHEMA**:
+
+![](https://i.imgur.com/ArteAJQ.png)
+
+#### 本例的datamodel
+
+本节的所有例子Subscriptions基于这个datamodel配置的Prisma services:
+
+<Code lang="graphql">{`
+type Post {
+  id: ID! @unique
+  title: String!
+  published: Boolean! @default(value: "false")
+  author: User
+}
+type User {
+  id: ID! @unique
+  name: String!
+  posts: [Post!]!
+}
+`}</Code>
+
+### 了解Prisma的的Subscriptions API
+
+Prisma允许你订阅三种不同类型的事件（数据模型中的每种类型）。以Post上面数据模型中的类型为例，这些事件是：
+
+- 创建一个新的'Post`节点
+- 更新现有的`Post`节点
+- 删除现有的`Post`节点
+
+**注意**
+
+Subscriptions不支持[批量Mutation]。
+
+
+`Subscription`类型的对应定义如下所示(在此定义可在Prisma的GraphQL schema中找到):
+
+<Code lang="graphql">{`
+type Subscription {
+  post(where: PostSubscriptionWhereInput): PostSubscriptionPayload
+}
+`}</Code>
+
+下面是一个Subscriptions操作:
+
+<Code lang="graphql">{`
+subscription {
+  post {
+    node {
+      id
+      title
+    }
+  }
+}
+`}</Code>
+
+如果没有通过where参数进一步约束，则post订阅将针对上述所有事件触发。PostSubscriptionPayload来自服务器的消息中包含哪些字段取决于事件的类型。
+
+#### 过滤特定事件
+
+`where`参数允许用户指定监听什么事件，也许用户只希望出现某些更新的时候监听，比如：
+
+-  ...删除一个`POST`时
+-  ...一个其中`title`包含特定关键字的`POST`创建时
+
+这些类型的约束可以使用`where`参数来表示。该类型的`where`是`PostSubscriptionWhereInput`:
+
+<Code lang="graphql">{`
+input PostSubscriptionWhereInput {
+  # Filter for a specific mutation:
+  # CREATED, UPDATED, DELETED
+  mutation_in: [MutationType!]
+  # Filter for a specific field being updated
+  updatedFields_contains: String
+  updatedFields_contains_every: [String!]
+  updatedFields_contains_some: [String!]
+  # Filter for concrete values of the Post being mutated
+  node: PostWhereInput
+  # Combine several filter conditions
+  AND: [PostSubscriptionWhereInput!]
+  OR: [PostSubscriptionWhereInput!]
+}
+`}</Code>
+
+上面提到的两个例子可与Prisma API中的以下Subscriptions来表示:
+
+<Code lang="graphql">{`
+# Only fire for _deleted_ posts
+subscription {
+  post(where: {
+    mutation_in: [DELETED]
+  }) {
+    # ... we'll talk about the selection set in a bit
+  }
+}
+# Only fire when a post whose title contains "GraphQL" is _created_
+subscription {
+  post(where: {
+    mutation_in: [CREATED]
+    node: {
+      title_contains: "GraphQL"
+    }
+  }) {
+    # ... we'll talk about the selection set in a bit
+  }
+}
+`}</Code>
+
+#### 探索Subscriptions的选择集
+
+你现在已经很好地了解了如何订阅你感兴趣的活动。但是，你现在如何得知与事件相关的数据？
+
+该PostSubscriptionPayload类型定义了你可以在post订阅中请求的字段。这是它的样子：
+
+<Code lang="graphql">{`
+type PostSubscriptionPayload {
+  mutation: MutationType!
+  node: Post
+  updatedFields: [String!]
+  previousValues: PostPreviousValues
+}
+`}</Code>
+
+下面是根据触发Subscriptions该事件的每个字段值的概述:
+
+`mutation` | `node` | `previousValues` | `updatedFields` |
+| --- | --- | --- | --- |
+| `CREATE` | 创建的节点| `null` | `null` |
+| `UPDATE` | 更新节点的新值| 更新节点前的值| 更新的字段的字符串列表|
+| `DELETE` | `null` | 被删除的节点| `null`
+
+在下文中，我们队每个字段进行更详细的讨论。
+
+###### Mutation
+
+该`mutation`字段类型是`MutationType`。`MutationType`是一个有三个值的枚举enum类型:
+
+<Code lang="graphql">{`
+enum MutationType {
+  CREATED
+  UPDATED
+  DELETED
+}
+`}</Code>
+
+因此，`PostSubscriptionPayload`类型的`mutation`字段包含发生了什么类型的信息。
+
+###### node
+
+该node字段具有Post类型。它表示创建或更新的Post元素，并允许你检索有关它的更多信息。
+
+请注意，对于DELETED-mutations，node将永远是null。如果你需要了解有关已删除Post节点的更多详细信息，可以使用该previousValues字段（稍后会详细介绍）。
+
+######  updatedFields
+
+`updatedFields`的类型为`[String!]`。
+
+你可能对UPDATED-mutations 感兴趣的一条信息是哪些字段已更新为Mutation。这就是该updatedFields领域的用途。
+
+假设一个clientSubscriptions与以下SubscriptionsPrisma API:
+
+<Code lang="graphql">{`
+subscription {
+  post {
+    updatedFields
+  }
+}
+`}</Code>
+
+现在，假设服务器接收以下Mutation更新指定`POST`的`title`:
+
+<Code lang="graphql">{`
+mutation {
+  updatePost(
+    where: {
+      id: "..."
+    }
+    data: {
+      title: "Prisma is the best way to build GraphQL servers"
+    }
+  ) {
+    id
+  }
+}
+`}</Code>
+
+然后，订阅的client端将收到以下Payload:
+
+<Code lang="json">{`
+{
+  "data": {
+    "post": {
+      "updatedFields": ["title"]
+    }
+  }
+}
+`}</Code>
+
+这是因为Mutation只更新了Post节点的title字段 - 没有别的。
+
+###### previousValues
+
+`previousValues`是`PostPreviousValues`的类型，和`POST`本身看起来非常相似:
+
+<Code lang="graphql">{`
+type PostPreviousValues {
+  id: ID!
+  title: String!
+}
+`}</Code>
+
+它基本上是一个镜像字段的辅助类型Post。
+
+previousValues仅用于UPDATED- 和 - DELETEDMutation。对于CREATED-mutations，它将永远是null（出于同样的原因，节点null用于DELETED-mutations）。
+
+###### 将所有内容放在一起
+
+再考虑前面示例的`updatePost`Mutation。但是现在假设，订阅查询包括_所有_我们刚才讨论的字段:
+
+<Code lang="graphql">{`
+subscription {
+  post {
+    mutation
+    updatedFields
+    node {
+      title
+    }
+    previousValues {
+      title
+    }
+  }
+}
+`}</Code>
+
+以下是服务器在执行之前的Mutation后推送到客户端的payload：
+
+<Code lang="json">{`
+{
+  "data": {
+    "post": {
+      "mutation": "UPDATED",
+      "updatedFields": ["title"],
+      "node": {
+        "title": "Prisma is the best way to build GraphQL servers",
+      },
+      "previousValues": {
+        "title": "GraphQL servers are best built with conventional ORMs",
+      }
+    }
+  }
+}
+`}</Code>
+
+请注意，这假设更新在执行Mutation之前Post具有以下内容title：“GraphQL servers are best built with conventional ORMs”。
+
+### 对象Subscriptions
+
+对于datamodel中的每个可用对象类型，将自动生成一个对象订阅。
+
+#### 订阅创建节点
+
+对于给定的type，你可以订阅正在使用生成的对象正在创建的所有节点。
+
+##### 订阅所有创建的节点
+
+要订阅某种type创建的节点，则可以使用所生成的对象的Subscription和`where`参数指定的`mutation_in:[CREATED]`。
+
+**订阅创建`POST`节点:**
+
+<Code lang="graphql">{`
+subscription {
+  post(where: {
+    mutation_in: [CREATED]
+  }) {
+    mutation
+    node {
+      description
+      imageUrl
+      author {
+        id
+      }
+    }
+  }
+}
+`}</Code>
+
+##### 使用过滤订阅特定创建的节点
+
+可以利用`where`对象的`node`参数订阅特定节点。
+
+**订阅创建特定`author`的`POST`节点:**
+
+<Code lang="graphql">{`
+subscription {
+  post(where: {
+    AND: [
+      {
+        mutation_in: [CREATED]
+      }, {
+      node: {
+        author: {
+          id: "cj03x3nacox6m0119755kmcm3"
+        }
+      }
+    ]
+  }) {
+    mutation
+    node {
+      description
+      imageUrl
+      author {
+        id
+      }
+    }
+  }
+}
+`}</Code>
+
+#### 订阅删除节点
+
+要订阅某种类型删除的节点，则可以使用所生成的对象的subscription和用`where`参数指定的`mutation_in:[DELETED]`。
+
+##### 订阅所有被删除的节点
+
+**订阅删除`POST`节点:**
+
+<Code lang="graphql">{`
+subscription deletePost {
+  post(where: {
+    mutation_in: [DELETED]
+  }) {
+    mutation
+    previousValues {
+      id
+    }
+  }
+}
+`}</Code>
+
+##### 订阅特定删除节点
+
+可以使用`where`对象的`node`参数过滤特定节点。
+
+**订阅其中`title`包含特定字符串的`POST`节点:**
+
+<Code lang="graphql">{`
+subscription {
+  post(where: {
+    mutation_in: [DELETED]
+    node: {
+      title_contains: "GraphQL"
+    }
+  }) {
+    mutation
+    previousValues {
+      id
+    }
+  }
+}
+`}</Code>
+
+#### 订阅更新节点
+
+要订阅某种type的更新节点，则可以使用所生成的对象的subscription和用`where`参数指定的`mutation_in:[UPDATED]`。
+
+##### 订阅所有更新节点
+
+**订阅更新`POST`节点:**
+
+<Code lang="graphql">{`
+subscription {
+  post(where: {
+    mutation_in: [UPDATED]
+  }) {
+    mutation
+    updatedFields
+    node {
+      description
+      imageUrl
+    }
+    previousValues {
+      description
+      imageUrl
+    }
+  }
+}
+`}</Code>
+
+##### 订阅特定字段的更新
+
+**订阅`POST`节点的其中一个`description`字段得到更新的事件，:**
+
+<Code lang="graphql">{`
+subscription {
+  post(where: {
+    mutation_in: [UPDATED]
+    updatedFields_contains: "description"
+  }) {
+    mutation
+    node {
+      description
+    }
+    updatedFields
+    previousValues {
+      description
+    }
+  }
+}
+`}</Code>
+
+类似于`updatedFields_contains`，多个过滤器的情况:
+
+- `updatedFields_contains_every:[String!]`:如果匹配指定的所有字段都进行了更新。
+- `updatedFields_contains_some:[String!]`:如果某些指定的字段已经更新匹配。
+
+**订阅所有`POST`节点的`description` 和`published`字段得到更新的事件，:**
+
+<Code lang="graphql">{`
+subscription {
+  post(where: {
+    mutation_in: [UPDATED]
+    updatedFields_contains_every: ["description", "published"]
+  }) {
+    mutation
+    node {
+      description
+    }
+    updatedFields
+    previousValues {
+      description
+    }
+  }
+}
+`}</Code>
+
+
+**订阅其中一个`POST`节点的`description` 或者`published`字段得到更新的事件，:**
+
+<Code lang="graphql">{`
+subscription {
+  post(where: {
+    mutation_in: [UPDATED]
+    updatedFields_contains_some: ["description", "published"]
+  }) {
+    mutation
+    node {
+      description
+    }
+    updatedFields
+    previousValues {
+      description
+    }
+  }
+}
+`}</Code>
+
+**注意**
+
+不能同时使用updatedFields过滤器，mutation_in: [CREATED]或mutation_in: [DELETED]仅适用于UPDATE事件！
+
+
+### Relation Subscriptions
+
+目前，关系字段Subscriptions仅可使用`UPDATED`Subscriptions一种解决方法。
+
+你可以通过“touching”节点强制进行通知。dummy: String向相关类型添加字段，并为关系状态刚刚更改的节点更新此字段。
+
+<Code lang="graphql">{`
+mutation updatePost {
+  updatePost(
+    where: {
+      id: "some-id"
+    }
+    data: {
+      dummy: "dummy" # do a dummy change to trigger update subscription
+    }
+  )
+}
+`}</Code>
+
+> 如果你对订阅的直接关系触发感兴趣，[请加入GitHub上的讨论(https://github.com/prismagraphql/feature-requests/issues/146)。
+
+### 用原始数据库SQL命令
+
+配置`docker-compose.yml`文件：
+
+<Code lang="yaml">{`
+version: '3'
+services:
+  prisma:
+    image: prismagraphql/prisma:1.25
+    restart: always
+    ports:
+    - "4466:4466"
+    environment:
+      PRISMA_CONFIG: |
+        port: 4466
+        databases:
+          default:
+            connector: postgres
+            host: postgres
+            port: 5432
+            # port: 3306
+            user: prisma
+            password: prisma
+            migrations: true
+            rawAccess: true
+  postgres:
+    image: postgres:10.5
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: prisma
+      POSTGRES_PASSWORD: prisma
+    volumes:
+      - postgres:/var/lib/postgresql/data
+volumes:
+  postgres:
+`}</Code>
+
+然后就可以直接用数据库语言操作。
+
+使用`executeRaw` Mutation:
+
+创建一个新用户：
+
+<Code lang="graphql">{`
+mutation {
+  executeRaw(query: "INSERT INTO default$default."User" (Id, Name, "updatedAt","createdAt") VALUES ('cjnkpvm0b000d0b22j7csr04v', 'Abhi', '2018-10-22T19:54:47.606Z', '2018-10-22T19:54:47.606Z');")
+}
+`}</Code>
+
+查询所有用户：
+
+<Code lang="graphql">{`
+mutation {
+  executeRaw(query: "SELECT * FROM default$default."User"")
+}
+`}</Code>
+
+
+## 运用
+
+### 使用Prisma Graphql API
+
+Prisma API通过HTTP使用。 这意味着你可以使用任何你喜欢的HTTP工具/库与Prisma API进行通信。
+
+这里是`createUser`Mutation的HTTP POST请求的结构:
+
+**Header**
+
+- `Authorization`：携带用于验证请求的_service token_（前缀为'Bearer`）; 仅在使用_service secret_部署服务时才需要。
+- `Content-Type`：指定请求主体（JSON）的格式，通常是`application / json`。
+
+**Body** (JSON)
+
+- `query`：要发送给API的GraphQL操作; 请注意，尽管该字段被称为“query”，它也用于 **Mutation**！！！
+- `variables`：一个JSON对象，包含在`query`中提交的GraphQL操作中定义的变量。
+
+此小节所有例子都基于与下面的服务配置的Prisma services:
+
+**prisma.yml**
+
+<Code lang="yaml">{`
+datamodel: datamodel.prisma
+secret: my-secret-42
+`}</Code>
+
+**`datamodel.prisma`**
+
+<Code lang="graphql">{`
+type User {
+  id: ID! @unique
+  name: String!
+}
+`}</Code>
+
+### curl
+
+[curl](https://curl.haxx.se/)是一个命令行工具(除其他事项外)，让你发送HTTP请求到URL。
+
+这里是你如何发送`createUser`Mutation使用curlPrisma API:
+
+<Code>{`
+curl '__YOUR_PRISMA_ENDPOINT__' \\
+-H 'Content-Type: application/json' \\
+-H 'Authorization: Bearer __YOUR_SERVICE_TOKEN__' \\
+--data-binary '{"query":"mutation ($name: String!) { createUser(data: { name: $name }) { id } }","variables":{"name":"Sarah"}}'
+`}</Code>
+
+为了**尝试这个例子**，从Prisma services替换相应值`__YOUR_PRISMA_ENDPOINT__`和`__YOUR_SERVICE_TOKEN__`占位符，并将所得片段贴到终端。
+
+一般来说在本地部署的服务endpoint为`http://localhost:4466`，使用demo server的请在yml文件中查看你的endpoint。
+
+token请在终端输入`prisma token`获得，Authorization格式类似这样： Bearer sadoifjaosif……
+
+以上请求和下面的Mutation作用相同:
+
+<Code lang="graphql">{`
+mutation {
+  createUser(data: {
+    name: "Sarah"
+  }) {
+    id
+  }
+}
+`}</Code>
+
+**试试这个例子**:
+
+1.从Prisma services替换相应值`__YOUR_PRISMA_ENDPOINT__`和`__YOUR_SERVICE_TOKEN__`占位符
+1.所生成的片段粘贴到你的终端，并按下回车键
+
+### fetch (Node.JS)
+
+[`fetch`](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API)功能可以让你的HTTP请求从JavaScript发送到URL。
+
+下面是你在一个node脚本中使用`fetch`发送`createUser`Mutation的Prisma API:
+
+<Code lang="javascript">{`
+const fetch = require('node-fetch')
+const endpoint = '__YOUR_PRISMA_ENDPOINT__'
+const query = \`
+mutation($name: String!) {
+  createUser(data: {
+    name: $name
+  }) {
+    id
+  }
+}
+\`
+const variables = { name: 'Sarah' }
+fetch(endpoint, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization:
+      'Bearer __YOUR_SERVICE_TOKEN__',
+  },
+  body: JSON.stringify({ query: query, variables: variables }),
+})
+  .then(response => response.json())
+  .then(data => console.log(JSON.stringify(data)))
+`}</Code>
+
+同样为以下功能：
+
+<Code lang="graphql">{`
+mutation {
+  createUser(data: {
+    name: "Sarah"
+  }) {
+    id
+  }
+}
+`}</Code>
+
+**试试这个例子**:
+
+1.从Prisma services替换相应值`__YOUR_PRISMA_ENDPOINT__`和`__YOUR_SERVICE_TOKEN__`占位符
+1.存放在一个JavaScript文件`script.js`
+1.通过在`script.js`所在的同一目录中运行`yarn add node-fetch`来安装`node-fetch`库
+1.使用以下终端命令执行该脚本:`node script.js`
+
+###  graphql-request
+
+[`graphql-request`](https://github.com/prismagraphql/graphql-request)库是fetch的轻量级封装。它主要用于需要跟一个GraphQL API交互的轻量级应用。
+
+#### 使用`request`
+
+**注意**
+
+`request`不支持将_headers_头放入请求([尚未](https://github.com/prismagraphql/graphql-request/pull/33))。因此，这个特殊的例子假定你的Prisma services部署时没有服务密码。
+
+<Code lang="javascript">{`
+const { request } = require('graphql-request')
+const query = \`
+mutation($name: String!) {
+  createUser(data: {
+    name: $name
+  }) {
+    id
+  }
+}
+\`
+const variables = { name: 'Sarah' }
+request('__YOUR_PRISMA_ENDPOINT__', query,  variables)
+  .then(data => console.log(data))
+`}</Code>
+
+#### 使用`GraphQLClient`
+
+<Code lang="javascript">{`
+const { GraphQLClient } = require('graphql-request')
+const client = new GraphQLClient('__YOUR_PRISMA_ENDPOINT__', {
+  headers: {
+    Authorization: 'Bearer __YOUR_SERVICE_TOKEN__',
+  },
+})
+const query = \`
+mutation($name: String!) {
+  createUser(data: {
+    name: $name
+  }) {
+    id
+  }
+}
+\`
+const variables = { name: 'Sarah' }
+client.request(query, variables)
+  .then(data => console.log(data))
+`}</Code>
+
+###  GraphQL Playground
+
+一个GraphQL Playground是一个GraphQL IDE，让你发送Query，Mutation和Subscriptions GraphQL的API。
+
+你可以通过将终端cd到服务的prisma.yml所在的同一目录来打开Prisma API的Playground，然后运行以下命令：
+
+<Code>{`
+prisma playground
+`}</Code>
+
+如果prisma.yml包含`secret`，Playground将已经用_Service token_配置。你可以在窗格的左下角验证这一点，加入 **HTTP header**:
+
+![](https://i.imgur.com/4Yvj4tD.png)
+
+这意味着你可以开始将请求发送到Prisma API的时候了。Query，Mutation和Subscriptions都写在Playground的左侧窗格中。然后你点击 **play** - 按钮实际发送请求。结果将出现在Playground的右窗格中:
+
+![](https://i.imgur.com/lNXNKXR.png)
+
+
+### Apollo Client
+
+[Apollo Client](https://www.apollographql.com/client)是在较大的前端应用中通常使用的复杂的GraphQL库。虽然所有前面的例子中使用的通用工具来发送Query和Mutation一样，Apollo Client使用用于发送Query和Mutation的专用方法:`query`＆`mutation`
+
+#### query
+
+<Code lang="javascript">{`
+const { ApolloClient } = require('apollo-boost')
+const gql = require('graphql-tag')
+const endpoint = 'https://eu1.prisma.sh/nikolas-burk/demodofin/dev'
+const client = new ApolloClient({
+  uri: endpoint
+});
+const query = gql\`
+  query {
+    users {
+      id
+      name
+    }
+  }
+\`
+client.query({
+  query: query,
+})
+  .then(data => console.log(data))
+`}</Code>
+
+#### mutation
+
+<Code lang="javascript">{`
+const { ApolloClient } = require('apollo-boost')
+const gql = require('graphql-tag')
+const endpoint = 'https://eu1.prisma.sh/nikolas-burk/demodofin/dev'
+const client = new ApolloClient({
+  uri: endpoint
+});
+const mutation = gql\`
+  mutation($name: String!) {
+    createUser(data: {
+      name: $name
+    }) {
+      id
+    }
+  }
+  \`
+const variables = { name: 'Sarah' }
+client.mutate({
+  mutation: mutation,
+  variables: variables
+})
+  .then(data => console.log(data))
+`}</Code>
+
+
+### Prisma Bindings
+
+Prisma Bindings可以看做Prisma client替代版本。
+
+关于GraphQL bindings 的文档[here](https://oss.prisma.io/content/GraphQL-Binding/01-Overview.html).
+
+它和Prisma client的区别,阅读这里[this](https://www.prisma.io/forum/t/help-understanding-prisma-clients-value-proposition/4394/17) forum post.
+
+#### 安装
+
+`cnpm i -S prisma-binding`
+
+#### 示例
+
+还是那个datamodel:
+
+<Code lang="graphql">{`
+type User {
+  id: ID! @unique
+  name: String
+}
+`}</Code>
+
+在`.graphqlconfig.yml`的`prisma`中定义：
+
+<Code lang="yaml">{`
+  prisma:
+    schemaPath: src/generated/prisma.graphql
+    includes: [
+      "prisma.graphql", 
+      "seed.graphql", 
+      "datamodel.graphql",
+    ]
+    extensions:
+      prisma: prisma/prisma.yml
+      codegen:
+      - generator: prisma-binding
+        language: typescript
+        output:
+          binding: src/generated/prisma.ts
+`}</Code>
+
+部署之后修改`index.ts`
+
+<Code lang="javascript">{`
+import { GraphQLServer } from 'graphql-yoga'
+import { Prisma } from './generated/prisma-client'
+import { resolvers } from './resolvers'
+const prisma = new Prisma({
+  endpoint: process.env.PRISMA_ENDPOINT!,
+  secret: process.env.PRISMA_SECRET!,
+  // debug: true,
+})
+ // 根据id查询某个user的名字
+prisma.query.user({ where { id: 'abc' } }, '{ name }')
+ // 查询所有user的id和name
+prisma.query.users(null, '{ id name }')
+ // 创建新user并返回她的id
+prisma.mutation.createUser({ data: { name: 'Sarah' } }, '{ id }')
+ // 更新一个用户的名字并返回id
+prisma.mutation.updateUser({ where: { id: 'abc' }, data: { name: 'Sarah' } }, '{ id }')
+ // 删除一个用户并返回该用户存在时的id
+prisma.mutation.deleteUser({ where: { id: 'abc' } }, '{ id }')
+const server = new GraphQLServer({
+  typeDefs: './src/schema.graphql',
+  resolvers: resolvers as any,
+  context: req => ({ ...req, db }),
+})
+server.start(({ port }) =>
+  console.log('Server is running on http://localhost:\${port}'),
+)
+`}</Code>
+
+在底层，每一个函数的调用都简单地转换为对你的Prisma service的实际HTTP请求（使用了[graphql-request](https://github.com/prisma/graphql-request))
+
+查询某条数据是否存在：
+
+<Code lang="javascript">{`
+prisma.exists.Post({
+  id: 'abc',
+  author: {
+    name: 'Sarah'
+  }
+})
+`}</Code>
+
+更多使用方式查看GraphQL bindings 的原文档[here](https://oss.prisma.io/content/GraphQL-Binding/01-Overview.html)
+
+下一节来学习Prisma的工具和配置
+
+<InternalLink href="/docs/part6" as="/docs/part6">Prisma CLI&配置文件</InternalLink>

@@ -1,0 +1,131 @@
+import withPost from '../../components/blog/with-post'
+import Code from '../../components/home/demos/code'
+
+export const meta = {
+  title: 'Prisma构建RESTful风格API',
+  description: 'Prisma构建RESTful风格API',
+  date: '2018-10-12T16:05:55.907Z',
+  url: 'https://prisma.1wire.com/blog/restful',
+  link: '/blog/restful'
+}
+
+export default withPost({...meta})
+
+在此页面上，你将学习如何:
+
+- 配置节点应用程序
+- 使用[Express.js](https://expressjs.com/)和Prisma client实现RESTful API
+- 使用`curl`测试你的REST API
+
+## 配置项目
+
+你将使用Express.js作为你的Web服务器。使用以下命令将`express`和`body-parser`依赖项添加到项目中:
+
+<Code>{`
+npm install --save express body-parser
+`}</Code>
+
+## 定义并实现API
+
+将有六条路由为简单的博客应用程序提供API:
+
+- `GET`
+   - `/posts/published`:返回所有_published_文章
+   - `/post/:postId`:按ID返回特定文章
+   - `/posts/user/:userId`:返回特定用户写的所有文章
+- `POST`
+   - `/user`:创建一个新用户
+   - `/post/draft`:创建一个新的_unpublished_文章
+- `PUT`
+   - `/post/publish`:_Publish_一个文章
+
+用以下代码替换`index.js`的当前内容:
+
+<Code lang="javascript">{`
+const { prisma } = require('./generated/prisma-client')
+const app = express()
+const express = require('express')
+const bodyParser = require('body-parser')
+app.use(bodyParser.json())
+app.get('/posts/published', async (req, res) => {
+  const publishedPosts = await prisma.posts({ where: { published: true } })
+  res.json(publishedPosts)
+})
+app.get('/post/:postId', async (req, res) => {
+  const { postId } = req.params
+  const post = await prisma.post({ id: postId })
+  res.json(post)
+})
+app.get('/posts/user/:userId', async (req, res) => {
+  const { userId } = req.params
+  const postsByUser = await prisma
+    .user({ id: userId })
+    .posts()
+  res.json(postsByUser)
+})
+app.post('/user', async (req, res) => {
+  const newUser = await prisma.createUser(req.body)
+  res.json(newUser)
+})
+app.post('/post/draft', async (req, res) => {
+  const newPost = await prisma.createPost(req.body)
+  res.json(newPost)
+})
+app.put('/post/publish/:postId', async (req, res) => {
+  const { postId } = req.params
+  const updatedPost = await prisma.updatePost(
+    {
+      where: { id: postId },
+      data: { published: true },
+    },
+  )
+  res.json(updatedPost)
+})
+app.listen(3000, () => console.log('Server is running on http://localhost:3000'))
+`}</Code>
+
+## 启动服务器
+
+使用以下命令启动服务器:
+
+<Code lang="javascript">{`
+node index.js
+`}</Code>
+
+你现在可以使用“curl”或[Postman](https://www.getpostman.com/)等工具来探索路线的功能。
+
+## 使用`curl`测试REST API
+
+<Code>{`
+curl -X POST \\
+  http://localhost:3000/post/draft \\
+  -H 'Content-Type: application/json' \\
+  -d '{
+  "title": "Awesome Post"
+}'
+`}</Code>
+
+<Code>{`
+curl -X PUT \\
+  http://localhost:3000/post/publish \\
+  -H 'Content-Type: application/json' \\
+  -d '{
+  "id": "__POST_ID__"
+}'
+`}</Code>
+
+<Code>{`
+curl -X GET \\
+  http://localhost:3000/post/__POST_ID__
+`}</Code>
+
+<Code>{`
+curl -X POST \\
+  http://localhost:3000/user \\
+  -H 'Content-Type: application/json' \\
+  -d '{
+  "name": "Alice"
+}'
+`}</Code>
+
+> 在某些代码段中，你需要将`__USER__ID__`或`__POST_ID__`占位符替换为实际用户的ID。

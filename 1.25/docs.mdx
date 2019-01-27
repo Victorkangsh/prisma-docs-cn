@@ -1,0 +1,496 @@
+import Code from '../home/demos/code'
+import {InternalLink} from './text/link';
+
+## Get Started
+
+目标：成功构建一个Graphql API服务器！Go->
+
+> Prisma 1.17以前的版本改动较大，历史上也出现很多破坏性更新，请确保你的prisma版本为1.19及以上，本文档同步官方保持最新。
+
+### 安装及部署
+
+本节内容与[首页](https://prisma.1wire.com#开始)相似，但是加了更多手动操作的内容。
+
+如果你已使用Prisma Demo Server成功部署，可直接跳过到[构建应用](#构建app),另外有[学习路径](#学习路径)可参考。
+
+> 如果你想在本地用docker新起一个Prisma服务器，参考[这里](https://prisma.1wire.com/blog/newdatabase)。
+
+> 如果你想用Prisma连接已运行的数据库，参考[这里](https://prisma.1wire.com/blog/existingdatabase)。
+
+#### 1. 安装
+
+npm或yarn安装，国内推荐使用cnpm：
+
+<Code>{`
+# 没有cnpm请先安装：npm i -g cnpm
+cnpm i -g prisma
+# or
+yarn global add prisma
+# 然后查看版本，出现即安装成功
+prisma -v
+`}</Code>
+
+mac用户也可选择使用brew安装：
+
+<Code>{`
+brew tap prisma/prisma
+brew install prisma
+`}</Code>
+
+#### 2. 连接数据库和Prisma
+
+<Code>{`
+# cd到你常用的目录
+prisma init hello-world
+`}</Code>
+
+在终端中可以看到各种选项，按上下键选择(windows用户建议使用PowerShell):
+
+> 想在本地用docker跑的用户选择new database,参考[这里](https://prisma.1wire.com/blog/newdatabase)
+
+- 选择 **Demo server**
+- 此时会打开app.prisma.io网页，可以注册登录或使用github账户登录，登录后点击授权即可。
+
+**注意此处千万不能用数字开头的邮箱注册(尤其qq邮箱)，包括注册github的邮箱，如果你的github账户邮箱由数字开头，建议用字母开头邮箱注册app.prisma.io**
+- 终端显示 **Authenticating** 后选择你想部署在哪个区域，有两个选择，欧洲和美国，后面有延迟状态，选延迟低的回车确认。如：账户名/demo-us1 即美国地区。
+- 填入你想使用的名字，这里我们直接回车，选择stage分支，默认是dev，再次直接回车就行。
+- 选择生成 **Prisma Client**的编程语言，这里我们选择 **Prisma JavaScript Client**,如选择TS，注意后面安装依赖时会多个graphql-tools。
+- 初始文件已生成，按照提示进入目录部署： cd hello-world && prisma deploy
+- 此时你的后端API已经可以访问，打开终端显示的http地址即可看到Prisma playground
+
+> `prisma.yml`是Prisma的根配置文件。
+> `datamodel.prisma`定义应用程序的数据库的数据模型(它基本上定义了数据库模式)。
+> `generated/prisma-client/`包含了自动生成的prisma client 代码。
+> 如果报错，请`prisma account` 查看名称开头是否为数字。
+
+#### 3. 定义数据模型
+
+打开编辑器编辑 `datamodel.prisma` 使用SDL语言风格 [SDL](https://www.prisma.io/blog/graphql-sdl-schema-definition-language-6755bcb9ce51/) 每个模型在数据库里对应一张表:
+
+<Code lang="graphql">{`
+type User {
+  id: ID! @unique
+  email: String @unique
+  name: String!
+  posts: [Post!]!
+}
+type Post {
+  id: ID! @unique
+  title: String!
+  published: Boolean! @default(value: "false")
+  author: User
+}
+`}</Code>
+
+#### 4. 部署 Prisma API
+
+在终端输入以下命令变更数据库表并生成新client：
+
+<Code>{`
+prisma deploy
+prisma generate
+`}</Code>
+
+Prisma API基于数据模型进行部署，并为该文件中的每个模型公开CRUD和实时操作。
+
+#### 5. 使用 Prisma client (JavaScript)
+
+Prisma client连接到Prisma API，允许你对数据库执行读写操作。 本节介绍如何使用 **JavaScript** 中的Prisma client。
+
+在`hello-world`目录中创建一个新的Node脚本：
+
+<Code>{`
+touch index.js
+#or 在编辑器中新建index.js
+`}</Code>
+
+编辑如下代码：
+
+<Code lang="javascript">{`
+const { prisma } = require('./generated/prisma-client')
+// 一个main函数，以便我们可以使用async/await
+async function main() {
+// 新建一个user，并新建一个post文章
+const newUser = await prisma
+  .createUser({
+    name: "Alice",
+    posts: {
+      create: {
+        title: "The data layer for modern apps",
+      }
+    },
+  })
+  console.log("Created new user: \${newUser.name} (ID: \${newUser.id})")
+  // 从数据库中读取所有用户user并将其打印到控制台
+  const allUsers = await prisma.users()
+  console.log(allUsers)
+  // 从数据库中读取所有文章post并将其打印到控制台
+  const allPosts = await prisma.posts()
+  console.log(allPosts)
+}
+main().catch(e => console.error(e))
+`}</Code>
+
+最后，在终端用初始化项目并启动这个文件：
+
+<Code>{`
+cnpm init -y
+cnpm install --save prisma-client-lib graphql@0.13
+node index.js
+`}</Code>
+
+此时终端显示用户已被存到数据库：
+
+<Code>{`
+Created new user: Alice (ID: cjn70mkjlgnv00b77iyk9zx0e)
+[ { id: 'cjn70mkjlgnv00b77iyk9zx0e', email: null, name: 'Alice' } ]
+[ { id: 'cjn70mkjrgnv10b77nhqgg2zd',title: 'The data layer for modern apps',published: false } ]
+`}</Code>
+
+<details><summary><b>查看更多操作</b></summary>
+
+<Code lang="javascript">{`
+const usersCalledAlice = await prisma
+  .users({
+    where: {
+      name: "Alice"
+    }
+  })
+`}</Code>
+
+<Code lang="javascript">{`
+// 替换下面的 __USER_ID__ 为真实的user ID
+const updatedUser = await prisma
+  .updateUser({
+    where: { id: "__USER_ID__" },
+    data: { email: "alice@prisma.io" }
+  })
+`}</Code>
+
+<Code lang="javascript">{`
+// 替换下面的 __USER_ID__ 为真实的user ID
+ const deletedUser = await prisma
+  .deleteUser({ id: "__USER_ID__" })
+`}</Code>
+
+<Code lang="javascript">{`
+const postsByAuthor = await prisma
+  .user({ email: "alice@prisma.io" })
+  .posts()
+`}</Code>
+
+</details>
+
+### 构建App
+
+> 以下内容为构建Graphql API应用，如需使用RESTful API，请参考[RESTful API APP](https://prisma.1wire.com/blog/restful)
+
+#### 配置项目
+
+[`grahpql-yoga`](https://github.com/prisma/graphql-yoga) 是基于 [Express.js](https://expressjs.com/)的Graphql服务器. 先安装它：
+
+<Code>{`
+npm install --save graphql-yoga
+`}</Code>
+
+每个GraphQL API都基于[GraphQL Schema](https://www.prisma.io/blog/graphql-server-basics-the-schema-ac5e2950214e/)，它指定了所有API操作和数据结构。可以理解为schema是前端和服务器之间的约定和连接器，schema指定了前端能取到什么样的后端数据。
+
+创建一个名为`schema.graphql`的新文件：
+
+<Code>{`
+touch schema.graphql
+`}</Code>
+
+要定义API操作，需要在GraphQL schema中指定`Query`和`Mutation`类型 - 以下操作是简单博客应用程序的示例，输入到schema.graphql中：
+
+<Code lang="graphql">{`
+type Query {
+  publishedPosts: [Post!]!
+  post(postId: ID!): Post
+  postsByUser(userId: ID!): [Post!]!
+}
+type Mutation {
+  createUser(name: String!): User
+  createDraft(title: String!, userId: ID!): Post
+  publish(postId: ID!): Post
+}
+type User {
+  id: ID!
+  email: String
+  name: String!
+  posts: [Post!]!
+}
+type Post {
+  id: ID!
+  title: String!
+  published: Boolean!
+  author: User
+}
+`}</Code>
+
+> `post`和`User`类型是对`datamodel.prisma`中指定的模型的直接重新定义。
+> 此时的定义是用于前端应用，前面说了，schema指定了前端能取到什么样的后端数据，所以要再声明一遍，除了已删除特定于Prisma对于数据库的特殊指令。
+> 教程里我们会学习到，schema里是要去掉敏感数据如密码的，因为schema里定义的模型，前端用户都能够取到，登录教程我们后面再说。
+
+#### 实现解析器功能
+
+以下是如何为GraphQL schema中定义的六个API操作实现解析器(resolvers)函数。 用以下代码片段完全替换`index.js`的当前内容：
+
+<Code lang="javascript">{`
+const { prisma } = require('./generated/prisma-client')
+const { GraphQLServer } = require('graphql-yoga')
+const resolvers = {
+  Query: {
+    publishedPosts(root, args, context) {
+      return context.prisma.posts({ where: { published: true } })
+    },
+    post(root, args, context) {
+      return context.prisma.post({ id: args.postId })
+    },
+    postsByUser(root, args, context) {
+      return context.prisma.user({
+        id: args.userId
+      }).posts()
+    }
+  },
+  Mutation: {
+    createDraft(root, args, context) {
+      return context.prisma.createPost(
+        {
+          title: args.title,
+          author: {
+            connect: { id: args.userId }
+          }
+        },
+      )
+    },
+    publish(root, args, context) {
+      return context.prisma.updatePost(
+        {
+          where: { id: args.postId },
+          data: { published: true },
+        },
+      )
+    },
+    createUser(root, args, context) {
+      return context.prisma.createUser(
+        { name: args.name },
+      )
+    }
+  },
+  User: {
+    posts(root, args, context) {
+      return context.prisma.user({
+        id: root.id
+      }).posts()
+    }
+  },
+  Post: {
+    author(root, args, context) {
+      return context.prisma.post({
+        id: root.id
+      }).author()
+    }
+  }
+}
+`}</Code>
+
+每个解析器都在Prisma client实例上调用一个名为`prisma`的方法，并附加到`context`对象。
+
+#### 配置GraphQL服务器
+
+现在你需要从`graphql-yoga`库中实例化`GraphQLServer`并传递GraphQL schema及其解析器函数。导入的`prisma client` 实例附加到`context`，以便解析器可以访问它。
+
+将以下代码段添加到`index.js`的底部：
+
+<Code lang="javascript">{`
+const server = new GraphQLServer({
+  typeDefs: './schema.graphql',
+  resolvers,
+  context: { 
+    prisma
+  },
+})
+server.start(() => console.log('Server is running on http://localhost:4000'))
+`}</Code>
+
+#### 启动GraphQL服务器
+
+要启动GraphQL服务器，请运行以下命令：
+
+<Code>{`
+node index.js
+`}</Code>
+
+#### 在Playground中查看应用程序层的GraphQL API
+
+应用程序层的GraphQL API现在公开了`schema.graphql`中定义的六个操作。
+
+要测试这些操作，请将打开浏览器到[GraphQL Playground](https://github.com/prisma/graphql-playground)的`http://localhost:4000`。
+
+> GraphQL Playground是一个交互式GraphQL IDE，可让你探索GraphQL API的操作。 你可以单击Playground窗口右边缘的绿色 **SCHEMA** - 按钮，查看GraphQL API的自动生成文档。
+> 你可以把它看做是Graphql的POST man，但是它可以直接查看API文档和自动补全输入，用起来你会扔掉别的后端的。
+
+我们在playground里随便玩几个操作，写一段然后run一下看右边的输出，建议不要复制下面的代码，多用tab自动补全写一下：
+
+<Code lang="graphql">{`
+mutation {
+  createUser(name: "Bob") {
+    id
+  }
+}
+`}</Code>
+
+拿到返回的id替换下面的 _USER_ID_  占位符
+
+<Code lang="graphql">{`
+mutation {
+  createDraft(
+    title: "GraphQL is great"
+    userId: "__USER_ID__"
+  ) {
+    id
+    published
+    author {
+      id
+    }
+  }
+}
+`}</Code>
+
+<Code lang="graphql">{`
+mutation {
+  publish(postId: "__POST_ID__") {
+    id
+    title
+    published
+  }
+}
+`}</Code>
+
+<Code lang="graphql">{`
+query {
+  publishedPosts {
+    id
+    title
+    author {
+      id
+      name
+    }
+  }
+}
+`}</Code>
+
+> 在某些代码段中，你需要将`__USER__ID__`或`__POST_ID__`占位符替换为前面查到的实际用户的ID。
+
+
+### 学习路径
+
+我在偶然的机会下接触到了Prisma，然后对Graphql这项技术茅塞顿开。我从零开始学习它到现在已用于生产环境，这中间也踩过一些坑，而官方其实没有太多资料的，所以我有必要为后来者提供一些便利，从而使Prisma能够更好更快地被广大中国开发者掌握和使用。
+
+到目前为止，国内其实没有一篇资料关于Prisma，但我被它的技术和架构深深感染，Prisma呈倍数地提升了整个团队的开发效率，它有必要被更多人认可。所以我联系到Prisma团队，在他们的支持下（尤其是Prisma的联合创始人Schickling ），搭建了Prisma的中文文档页面，并初步翻译了文档。为了配合我的翻译工作，Prisma团队加班完善了文档最新的版本，非常感谢。
+
+在官方的描述中，Prisma像是一个ORM层，类似Sequelize或mongoose，但我在实际使用和深入理解后，发现并不是，Prisma不仅仅是ORM，它整个生态系统和技术栈就是一个框架，一整套完善的技术，一个新的后端，甚至它要比express和koa等框架要领先一个时代，因为Prisma不仅仅能做到express的所有功能，还能直接支持Graphql，集成了更加强大的ORM层和数据库，可以说只要掌握Prisma，就完全能独立开发出一个简单APP的后端。
+
+Graphql一直被吵的沸沸扬扬，无数前端工程师翘首以待，但直到今天，依然没有普及开，我觉得其中最重要的一点就是，它需要后端做更大量繁琐的工作，这在中国基本不可能，前后端团队要打起来的，甚至后端自己都无力推动。所以尽管Graphql能极大提升前端的效率和APP的速度，但后端复杂的问题不解决，就没有可能普及。
+
+所以Prisma应需而生，它完全把复杂的东西抽离，后端仅仅定义好数据库字段type和解析器resolver就完了，前端已经可以取到数据了，甚至还有自动生成的标准的API文档，没有数十个甚至上百个路由，没有各种判断和联调，也不需要考虑数据库连接，不仅解决原先Graphql后端的复杂度，甚至比以往的Node后端更加简单，而且由于强类型系统，还更加可靠，性能更强。
+
+使用Prisma不用担心灵活性，Prisma技术栈里的Graphql Yoga完全兼容Express，比如说我业余时间开发的一款小程序的后端就完全是Prisma（仅用一天就开发完成），但其中的微信登录我加了一条POST路由来完成微信登录获取unionId（其实还是可以用Prisma的resolvers解决，但我复制粘贴图方便），和传统开发没有任何区别，所以不管你是要迁移还是在原先基础上升级，都没有任何问题。
+
+说真的，不管是前端还是后端，未来不掌握Prisma技术栈，会在效率和先进性上吃很大的亏，越深入越觉得如此。
+
+OK，说完上面一大堆，接下来我试图描述一下学习路径，简化学习成本。
+
+在完成Get Started后，你就已经有了一个基础的后端，这时候我们就会明白，开发Prisma最重要的两个部分，一是datamodel，二是resolver。定义datamodel是所有后续操作的第一步，有了数据才能操作嘛，type的定义很简单，很短的一节<InternalLink href="/docs/part2" as="/docs/part2">数据模型定义</InternalLink>就可以明白。所以建议先学会，然后就可以自己定义一下了。至于和现有数据库的合并操作，有需求的可以看。
+
+定义好数据模型后用`prisma generate` 自动生成操作数据的代码，然后复制datamodel.prisma的模型到schema.graphql中，去除数据库特定字符和不需要前端得到的字段，如密码和手机号等，然后复制generated中你实际需要的Query、Mutation和Subscription到schema.graphql中，当然也可以自定义创建查询Query和突变Mutation。然后就可以去写resolver了。
+
+resolver翻译过来就是解析器的意思，解析什么呢，解析当后端接收到前端发来的请求后如何执行并返回什么东西。比如说前面这个新建文章：
+
+<Code lang="graphql">{`
+# 这是前端的操作，可以在playground中写，也可以用ajax、fetch、graphql apollo、甚至wx.request发送过来。
+# mutation即操作，这个操作就是createDraft，新建草稿，发给后端标题title“GraphQl is great”和用户的id，后面{}中的就是你想后端返回给你的字段。
+//playground中
+mutation {
+  createDraft(
+    title: "GraphQL is great"
+    userId: "__USER_ID__"
+  ) {
+    id
+    published
+    author {
+      id
+    }
+  }
+}
+# 这时候我们来看后端干了些什么
+//index.js中
+const resolvers = {
+……
+  Mutation: {
+    createDraft(root, args, context) {
+      return context.prisma.createPost(
+        {
+          title: args.title,
+          author: {
+            connect: { id: args.userId }
+          }
+        },
+      )
+    },
+……
+`}</Code>
+
+这是resolvers中的Mutation中定义createDraft的操作，createDraft接收了三个参数，这个我们后面细讲，这里我们只有知道，args包含了你前端传来的所有参数，比如title为args.title，userId同理。
+
+而context就相当于数据库，`context.prisma.createPost`就类似`sequelize.model.Post.create`或`mongoose.model('Post', schema).create`。
+
+而且数据库的包含关系和外键等已经被抽象，这里在Post的author中，直接connect到author的唯一字段即id就好了。传统数据库的关系操作还是比较繁琐的，Prisma的 connect更直观明确。
+
+也不用处理路由，这里定义好resolvers后前端就已经可以createDraft了，API接口就一个，比如此处是`localhost:4000`。前端所有请求url都是这里。先在playground中试试吧。
+
+在resolvers中还可以做更多复杂的处理，你可以集成消息队列、grpc等各种，甚至也可以用sequelize和mongoose来返回数据到这里从而实现Graphql接口。
+
+比如说此处我们给Post添加点赞的功能，在datamodel和schema中给Post加入liked字段并设默认值为0（设默认值参考数据模型定义章节），deploy一下，然后在schema中加入addPostLike的Mutation，再写resolvers：
+
+<Code lang="javascript">{`
+// 在resolvers函数中
+……
+async addPostLike(parent, args, context) {
+        const l = await context.prisma.post({id: args.where.id})
+        return context.prisma.updatePost({
+            where:{id: args.postId },
+            data: {
+                liked: l.liked + 1
+            },
+        })
+      }
+……
+`}</Code>
+
+通过以上例子，你应该大概明白Prisma的流程了，然后这里的重点就是datamodel和resolvers，schema算半个重点吧。
+
+所以后面你先完成datamodel和resolvers中的<InternalLink href="/docs/part3" as="/docs/part3">Prisma client</InternalLink>也就是上述的`context.prisma.···`的各种方法，最后去<InternalLink href="/docs/part4" as="/docs/part4">深入理解Prisma</InternalLink>和<InternalLink href="/docs/part5" as="/docs/part5">Prisma Graphql API</InternalLink>
+
+最后把它部署到服务器则需要了解<InternalLink href="/docs/part6" as="/docs/part6">Prisma的CLI和Configuration配置文件</InternalLink>以及<InternalLink href="/docs/part7" as="/docs/part7">Prisma Server部署</InternalLink>。
+
+剩下一些更新的操作，登录功能，上传文件，Prisma中间件等等我会放在最后或是专栏那块。
+
+看完所有文档和专栏后，你就可以去看实际案例，底部有链接，仿AirBnb的功能展示Prisma所有操作，拿来改一改就能成为自己的后端。
+
+如果在学习和使用中有任何疑问和建议，请加入<InternalLink href="/blog/wechat" as="/blog/wechat">Prisma中国社区</InternalLink>讨论。也欢迎广大开发者在github提交pr。
+
+ok，下面我们继续下一节。
+
+<InternalLink href="/docs/part2" as="/docs/part2">数据模型定义</InternalLink>
+
+
+
+
+
+
+
+
+
+

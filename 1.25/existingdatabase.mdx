@@ -1,0 +1,265 @@
+import withPost from '../../components/blog/with-post'
+import Image from '../../components/image'
+import Code from '../../components/home/demos/code'
+
+export const meta = {
+  title: 'Prisma连接已运行数据库',
+  description: 'Prisma连接已运行数据库',
+  date: '2018-10-13T16:05:55.907Z',
+  url: 'https://prisma.1wire.com/blog/existingdatabase',
+  link: '/blog/existingdatabase'
+}
+
+export default withPost({...meta})
+
+在此页面上，你将学习如何:
+
+- 安装Prisma CLI
+- 使用Docker设置Prisma
+- Introspect 现有数据库并派生数据模型
+- 使用datamodel配置Prisma API
+- 生成Prisma client
+- 使用Prisma client读取和写入数据
+
+> 使用Prisma连接现有数据库目前仅在使用 **PostgreSQL**数据库时才有效。
+
+## 先决条件
+
+确保手头有数据库的连接详细信息。这包括以下信息:
+
+- **Host**:Postgres服务器的主机，例如`localhost`。
+- **Port**:Postgres服务器侦听的端口，例如`5432`。
+- **User & Password**:Postgres服务器的凭据。
+- **现有_database的名称_**:Postgres _database_的名称。
+- **现有_schema的名称_**:Postgres _schema_的名称，例如`public`。
+
+你还需要知道你的数据库服务器是否使用 **SSL**。
+
+## 安装Prisma CLI
+
+Prisma CLI用于各种Prisma工作流程。你可以使用[Homebrew](https://brew.sh/)或[NPM](https://www.npmjs.com/)安装它:
+
+<Code>{` 
+brew tap prisma/prisma
+brew install prisma
+`}</Code>
+
+<Code>{` 
+npm install -g prisma
+`}</Code>
+
+## 安装Docker
+
+要在本地使用Prisma，你需要在计算机上安装[Docker](https://www.docker.com)。如果你还没有Docker，可以下载适用于你的操作系统的Docker Community Edition [此处](https://www.docker.com/community-edition)。
+
+> 不想使用Docker？你现在也可以开始使用[demo database](https://prisma.1wire.com/docs)。
+
+## 设置Prisma服务器
+
+### 创建新目录
+
+<Code>{` 
+mkdir hello-world
+cd hello-world
+`}</Code>
+
+### 创建Docker Compose文件
+
+要在你的计算机上启动Prisma，你需要一个[Docker Compose文件](https://docs.docker.com/compose/compose-file/)来配置Prisma并指定它可以连接到哪个数据库:
+
+<Code>{` 
+touch docker-compose.yml
+`}</Code>
+
+### 添加Prisma Docker镜像
+
+将以下内容粘贴到刚刚创建的Docker Compose文件中:
+
+<Code lang="yaml">{` 
+version: '3'
+services:
+  prisma:
+    image: prismagraphql/prisma:1.25
+    restart: always
+    ports:
+    - "4466:4466"
+    environment:
+      PRISMA_CONFIG: |
+        port: 4466
+        databases:
+          default:
+            connector: postgres
+            host: __YOUR_POSTGRES_HOST__
+            port: __YOUR_POSTGRES_PORT__
+            database: __YOUR_POSTGRES_DB__
+            schema: __YOUR_POSTGRES_SCHEMA__
+            user: __YOUR_POSTGRES_USER__
+            password: __YOUR_POSTGRES_PASSWORD__
+            migrations: false
+            ssl: __SSL_CONNECTION__
+`}</Code>
+
+<Code>{`
+# MySQL Coming soon. See https://github.com/prisma/prisma/issues/2506
+`}</Code>
+
+### 指定数据库连接
+
+要指定Prisma应连接的数据库，请将Docker Compose文件中拼写为全大写的占位符替换为数据库的相应值:
+
+- `__YOUR_POSTGRES_HOST__`:Postgres服务器的主机，例如`localhost`。 (连接到本地数据库时，可能需要使用`host.docker.internal`。)
+- `__YOUR_POSTGRES_PORT__`:Postgres服务器侦听的端口，例如`5432`。
+- `__YOUR_POSTGRES_DB__`:Postgres数据库的名称。
+- `__YOUR_POSTGRES_SCHEMA__`:Postgres架构的名称，例如`public`。
+- `__YOUR_POSTGRES_USER__`:数据库用户。
+- `__YOUR_POSTGRES_PASSWORD__`:数据库用户的密码。
+- `__SSL_CONNECTION__`:数据库服务器是否使用SSL，可能的值为“true”和“false”。
+
+### 启动Prisma服务器
+
+要启动Prisma并启动已连接的数据库，请运行以下命令:
+
+<Code>{` 
+docker-compose up -d
+`}</Code>
+
+你的本地Prisma服务器现在在`http://localhost:4466`上运行。
+
+## 从数据库模式派生Prisma datamodel
+
+### 创建prisma.yml
+
+接下来，你需要创建一个`prisma.yml`:
+
+<Code>{` 
+touch prisma.yml
+`}</Code>
+
+现在添加以下内容:
+
+<Code lang="json">{`
+endpoint: http://localhost:4466
+`}</Code>
+
+> `endpoint`需要匹配正在运行的Prisma服务器的URL。
+
+### Introspect数据库
+
+你现在需要内省数据库模式以生成数据模型，这是Prisma client API的基础:
+
+<Code>{` 
+prisma introspect
+`}</Code>
+
+CLI生成`datamodel- [TIMESTAMP] .graphql`(例如`datamodel-1533886167692.graphql`)文件，其中包含数据库模式的SDL版本。在第一次运行时，它还将`datamodel`属性写入`prisma.yml`。
+
+最后，你需要将文件重命名为`datamodel.prisma`，因为这是你在`prisma.yml`中指定的文件名。
+
+## 部署Prisma API
+
+你现在可以使用_minimal_设置来部署Prisma API。运行以下命令(这 **不会**改变数据库中的任何内容):
+
+<Code>{` 
+prisma deploy
+`}</Code>
+
+启动Prisma服务器可能需要几分钟时间。如果`prisma deploy`命令失败，请等待几分钟再试一次。还运行`docker ps`以确保Docker容器实际运行。
+
+## 生成你的Prisma client 
+
+Prisma client 是一个自定义的自定义库，可以连接到你的Prisma API。将以下行附加到`prisma.yml`的末尾:
+
+<Code lang="yaml">{` 
+generate:
+  - generator: javascript-client
+    output: ./generated/prisma-client/
+`}</Code>
+
+
+现在使用以下命令生成 client :
+
+<Code>{` 
+prisma generate
+`}</Code>
+
+CLI现在将你的Prisma client 存储在`prisma. client`目录中，如`prisma.yml`中所指定。
+
+## 准备节点应用程序
+
+运行以下命令以创建空节点脚本:
+
+<Code>{` 
+touch index.js
+`}</Code>
+
+接下来，初始化当前目录中的空NPM项目并安装所需的依赖项:
+
+<Code>{` 
+npm init -y
+npm install --save prisma-client-lib graphql@0.13
+`}</Code>
+
+## 使用Prisma client 读取和写入数据
+
+Prisma client 的API操作取决于从数据库内省生成的数据模型。以下示例查询假定数据模型中存在“User”类型，定义如下:
+
+<Code lang="graphql">{`
+type User {
+  id: ID! @unique
+  name: String!
+}
+`}</Code>
+
+如果你没有这样的“用户”类型，则需要使用与你的数据模型匹配的类型调整以下代码段。
+
+在`index.js`中添加以下代码并在之后保存:
+
+<Code lang="javascript">{` 
+const { prisma } = require('./generated/prisma-client')
+async function main() {
+  const newUser = await prisma.createUser({ name: 'Alice' })
+  console.log("Created new user: \${newUser.name} (ID: \${newUser.id})")
+  const allUsers = await prisma.users()
+  console.log(allUsers)
+}
+main().catch(e => console.error(e))
+`}</Code>
+
+使用以下命令执行:
+
+<Code>{` 
+node index.js
+`}</Code>
+
+每当使用该命令运行此脚本时，都会在数据库中创建一个新的用户记录(因为调用了`createUser`)。
+
+随意使用Prisma client API，并通过将以下代码片段添加到文件(在`main`函数的末尾)并重新执行脚本来尝试以下一些操作:
+
+<Code lang="javascript">{` 
+const user = await prisma
+  .user({ id: '__USER_ID__' })
+`}</Code>
+
+<Code lang="javascript">{` 
+const usersCalledAlice = await prisma
+  .users({
+    where: {
+      name: 'Alice'
+    }
+  })
+`}</Code>
+
+<Code lang="javascript">{` 
+ const updatedUser = await prisma
+  .updateUser({
+    where: { id: '__USER_ID__' },
+    data: { name: 'Bob' }
+  })
+`}</Code>
+
+<Code lang="javascript">{` 
+ const deletedUser = await prisma
+  .deleteUser({ id: '__USER_ID__' })
+`}</Code>
+
+> 在某些代码段中，你需要将`__USER__ID__`占位符替换为实际用户的ID。

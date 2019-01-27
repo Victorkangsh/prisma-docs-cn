@@ -1,0 +1,432 @@
+import Code from '../home/demos/code'
+import {InternalLink} from './text/link';
+
+## 深入理解Prisma
+
+### 什么是Prisma？
+
+Prisma的是一个_data layer_在你的应用程序体系结构取代了传统的ORM。 
+
+数据层由几个部分组成:
+
+-  一个充当数据库的代理的 **Prisma服务器**
+-  一个Prisma服务器上运行的并产生实际的数据库查询的高性能 **查询引擎**
+-  一个连接到Prisma服务器的 **Prisma client**
+-  一个可让你Subscriptions数据库事件的 **实时事件系统**
+
+使用Prisma cloud的说明 
+
+_Prisma_是开源的，可以随意使用在别的云服务上。[_Prisma Cloud_](https://www.prisma.io/cloud)是一种Prisma自己的提供围绕Prisma的工具和服务的应用程序(通过CLI及web接口使用)。当你使用Prisma时Prisma云的使用是可选的。
+
+Prisma cloud的目标是简化Prisma的项目工作流程。它具有一个 **数据浏览器**和一个 **部署历史**(很快推出 **自动回滚**)，各种 **团队协作**选项，以及 **云提供商的集成**，以方便为开发者建立和维护他们的Prisma服务器。
+
+**开始使用Prisma云[这里](https://app.prisma.io/)。**
+
+### 用例
+
+Prisma在你使用数据库的任何content中。
+
+#### 构建GraphQL服务器
+
+Prisma是构建GraphQL服务器的完美工具。Prisma client与Apollo生态系统兼容，具有GraphQLSubscriptions和Relay-style分页默认支持，提供端到端的类型安全，并配有一个内置的DataLoader解决N + 1问题。
+
+#### 构建REST API
+
+Prisma也可以构建REST API，它完全可以取代传统的ORM。它提供了N多好处，如类型安全，先进的API和读写相关数据灵活的方式。
+
+#### CLIs, Scripts, Serverless Functions & a lot more
+
+Prisma的有一个非常灵活的API，这使得它非常适合用于各种使用情况。每当你需要跟一个或多个数据库连接，Prisma将对简化数据库工作流程有很大的帮助。
+
+### 为什么要使用Prisma的？
+
+#### 简单的数据库工作流
+
+Prisma的总体目标是从常见数据库的工作流中删除的复杂性并简化你的应用程序数据访问:
+
+-  **类型安全的数据库访问**得益于定制和自动生成的Prisma client。
+-  **关系数据和事务**简单而强大的API。
+-  Prisma统一(_即将推出_)访问多个数据库，并且因此显着地降低了**跨数据库工程的复杂性**。
+-  **数据库的实时流操作和事件系统**确保使你的数据库中发生的所有重要事件实时更新。
+-  根据数据模型声明**自动数据库迁移(可选)**使用GraphQL的schema定义语言(SDL)表示。
+-  其他数据库的工作流如**数据导入，导出**。还有更多……
+
+#### 数据库的实时层
+
+一些数据库，如RethinkDB或DynamoDB提供开箱即用的实时API。这样的API可以让客户_订阅_任何修改数据库中发生的事情。绝大多数传统的数据库不提供这样的实时API，手动实现它变得非常复杂。
+
+**但Prisma提供所有支持的数据库的实时API**，让你Subscriptions任何数据库事件，如_creating_，_updating_或_deleting_数据。 
+
+#### 端到端类型安全
+
+类型安全地编程是现代应用开发的默认（如TypeScript）。下面是一些类型安全提供的核心优势:
+
+-  **信心**:由于静态分析和编译时错误检查，开发人员可以对其代码充满信心。
+-  **开发者体验**:具有明确定义的数据类型时，开发人员的开发体验会极大提升。类型定义是IDE功能的基础，如_智能自动完成_或_跳转到定义_。
+-  **代码生成**:在开发工作流程中利用代码生成很容易，避免编写样板代码。
+-  **跨系统约定:**类型定义可以跨系统共享（例如，在客户端和服务器之间），并用作定义相应接口/API的约定。
+
+**端到端类型安全**是指从客户端到数据库在整个堆栈中具有类型安全性。 端到端类型安全体系结构可能如下所示：
+
+-  **数据库**:Prisma提供强类型数据库层，datamodel定义存储在数据库中的数据类型。
+-  **应用服务器**:应用程序服务器定义自己的schema（例如，使用GraphQL或OpenAPI / Swagger），它可以重用或转换数据库中的数据类型。 应用程序服务器需要使用类型安全的语言（例如TypeScript，Scala，Go）编写。
+-  **客户端**:了解应用程序服务器架构的客户端可以在构建时验证API请求和潜在响应。
+
+#### 干净和分层的架构
+
+在开发应用程序服务器时，最复杂的是在同步，查询优化/性能和安全性方面实现安全且组织良好的数据库访问。 当涉及多个数据库时，这会变得更加复杂。
+
+解决这个问题的一个常见解决方案是引入专用数据访问层（DAL），它抽象出数据库访问的复杂性。 DAL的API由应用程序服务器使用，允许API开发人员简单地思考他们需要什么数据，而不必担心如何从数据库安全地和高效地检索它。
+
+![](https://i.imgur.com/SUH6AqW.png)
+
+使用DAL可确保 **明确区分关注点**，从而提高代码的 **可维护性和可重用性**。 具有某种数据库抽象（无论是简单的ORM库还是独立的基础架构组件）是小型应用程序以及大规模运行的应用程序的最佳实践。 它确保应用程序服务器能够以 **安全且高效**的方式与你的数据库通信。
+
+Prisma是一个自动生成的DAL，遵循与行业领先的DAL（例如Twitter的Strato或Facebook的TAO）相同的原则，同时仍然可以灵活应用于较小的应用程序。
+
+Prisma允许你从一开始就使用干净的体系结构启动项目，并使你免于编写将数据库和应用程序服务器强耦合在一起的代码。
+
+### 如何使Prisma融入你的体系？
+
+Prisma是一个独立的基础架构组件，位于数据库之上。 然后，你在应用程序服务器中使用Prisma client（可以使用各种语言）连接到Prisma。
+
+这使你可以通过简单而现代的API与数据库通信，从而确保高性能和安全的数据库访问。
+
+## Prisma基础：datamodel、Prisma server、Prisma client
+
+当使用Prisma时，你主要得清楚这**三个概念**:
+
+-  **datamodel**:定义应用程序的数据模型，是Prisma client API的基础。(可选:可以用来对数据库进行迁移。)
+-  **Prisma server**:位于数据库顶层的独立基础架构组件。
+-  **Prisma client**:一个自动生成的库，它连接到Prisma服务器，允许你在数据库中读取，写入和实时传输数据。 它应用于应用程序中的数据访问。
+
+### datamodel
+
+数据模型的主要用途是定义数据库、定义Prisma client的API基础。
+
+####  Prisma client操作都是从数据模型得出
+
+对于在数据模型中定义的每个模型中，会自动为你生成以下Prisma client操作:
+
+-  **读取单个数据**
+-  **读取数据的列表**(包括过滤，排序和分页)
+-  **写入新数据**
+-  **更新现有的数据**
+-  **删除现有的数据**
+-  **检查是否存在**某些数据
+-  **有实时更新**时，对任何数据写操作
+
+你可以在part3找到所有这些操作。
+
+#### schema定义语言(SDL)
+
+数据模型在`.prisma`文件定义好，用了[GraphQL SDL语法](https://www.prisma.io/blog/graphql-sdl-schema-definition-language-6755bcb9ce51/)。使用SDL是因为它与编程语言无关，使用简单，富有表现力和直观。
+
+使用SDL定义数据模型没有严格的技术要求，并且API可能会在将来以其他方式指定数据模型。 如果你想要查看指定数据模型的其他方法，请创建功能请求。
+
+#### 使用datamodel迁移数据模型(可选)
+
+有两种情况创建的数据模型:
+
+-  **手动写入**:从头开始手动编写数据模型时，数据模型还用于执行数据库迁移（这仅适用于没有现有数据的新数据库）。 数据模型的模型定义不仅确定了Prisma client的API操作，还映射到数据库（这意味着它们用于以声明方式执行数据库迁移）。
+-  **从现有的数据库schema(Introspecting )**当你开始将Prisma与现有数据库一起使用时，数据模型将从现有数据库模式派生。 在这种情况下，Prisma不用于执行数据库迁移（相反，你也可以在使用时手动迁移数据库）。
+
+#### 示例
+
+以下是两个简单的数据模型:
+
+<Code lang="graphql">{`
+type Post {
+  id: ID! @unique
+  createdAt: DateTime!
+  published: Boolean! @default(value: "false")
+  title: String!
+  author: User!
+}
+type User {
+  id: ID! @unique
+  email: String @unique
+  name: String!
+  posts: [Post!]!
+}
+`}</Code>
+
+这里有几件事情需要注意:
+
+- 该`POST`和`User`模型经由关系(由`author`和`posts`字段中定义)连接。
+- `！`意味着该模型的相应字段永远不能`null`。
+- `@unique`指令保证不会有两个记录有该字段的值相同。
+- `@default`指令设置默认值。
+- `createdAt`不可设置，将由Prisma生成，表示创建一个记录的确切时间。还有就是`updatedAt`表明一个记录的最后更新的时间。
+
+###  Prisma client
+
+该Prisma client是一个自动生成的库，它取代了API服务器中的传统ORM。 它连接到位于数据库顶部的Prisma服务器：
+
+![](https://imgur.com/URyxmnZ.png)
+
+#### 无缝关系API
+
+该Prisma client是在不同的编程语言，并提供类型安全的数据库访问。相对于传统的ORM，它提供了一个无缝的API与关系数据的工作，连接和交易。
+
+以下是处理在单个事务几个写操作的例子:
+
+- 创建一个新的`User`纪录
+- 创建两个新的`POST`记录
+- 通过`posts`关系新建两个post并和现有的一个`post`记录连接到新的`User`纪录
+
+JavaScript：
+
+<Code lang="javascript">{`
+  .createUser({
+    name: "Alice",
+    password: "IlikeTurtles",
+    posts: {
+      create: [{
+        title: "Prisma is the data layer for modern applications",
+      }, {
+        title: "Check out How to GraphQL - The fullstack tutorial for GraphQL",
+      }],
+      connect: {
+        id: "cjli6tknz005s0a23uf0lmlve"
+      }
+    }, 
+  })
+`}</Code>
+
+TypeScript：
+
+<Code lang="typescript">{`
+  .createUser({
+    name: "Alice",
+    password: "IlikeTurtles",
+    links: {
+      create: [{
+        description: "The data layer for modern applications",
+        url: "https://www.prisma.io"
+      }, {
+        description: "Fullstack GraphQL tutorial",
+        url: "https://www.howtographql.com"
+      }],
+      connect: {
+        id: "cjli6tknz005s0a23uf0lmlve"
+      }
+    }, 
+  })
+`}</Code>
+
+Go：
+
+<Code lang="go">{`
+    password := "IlikeTurtles"
+    description := "The data layer for modern applications"
+    url := "https://www.prisma.io"
+    linkId := "cjli6tknz005s0a23uf0lmlve"
+    db.CreateUser(&prisma.UserCreateInput{
+        Name:     &name,
+        Password: &password,
+        Links: &prisma.LinkCreateManyWithoutPostedByInput{
+            Create: &prisma.LinkCreateWithoutPostedByInput{
+                Description: &description,
+                Url:         &url,
+            },
+            Connect: &prisma.LinkWhereUniqueInput{
+                ID: &linkId,
+            },
+        },
+    })
+`}</Code>
+
+对于传统的ORM，这样一组写操作需要你手动控制数据库事务。而现在Prisma client可以处理你的操作。
+
+#### 类型安全数据访问
+
+通过你的Prisma client暴露的操作是强类型。 对于任何类型化的编程语言，这意味着你可以获得所有数据库操作的编译时安全性，并且你确切地知道要返回的数据形状。
+
+它还为你提供了令人惊叹的开发人员体验：你可以在编辑器中获得自动补全功能。
+
+所有类型都是自动生成的，因此你无需为此编写任何样板文件。 更改数据模型后，只需重新生成Prisma客户端，所有类型都将更新。
+
+#### 实时更新
+
+将实时事件系统添加到数据库是一项非常复杂的任务。 Prisma客户端允许你潜入任何数据库事件，而无需处理底层基础架构。 你可以通过$ subscribe属性上的生成方法执行此操作。
+
+下面是一个订阅事件的示例，其中创建了在其电子邮件地址中包含gmail的新用户记录：
+
+JavaScript：
+
+<Code lang="javascript">{`
+prisma.$subsribe.user({
+  mutation_in: ["CREATED"],
+  email_contains: "gmail"
+}).node()
+`}</Code>
+
+TypeScript：
+
+<Code lang="typescript">{`
+prisma.$subsribe.user({
+  mutation_in: ["CREATED"],
+  email_contains: "gmail"
+}).node()
+`}</Code>
+
+Go：
+
+<Code lang="go">{`
+// subscriptions for the Prisma Go client will be available soon
+`}</Code>
+
+
+
+#### 原生GraphQL
+
+Prisma client可以运行使用`$graphql`方法对数据库运行GraphQL的Query和Mutation。
+
+这里展示了如何使用原生API GraphQL创建一个新的`User`记录的例子:
+
+<Code lang="javascript">{`
+const mutation = \`
+  mutation ($name: String!){
+    createUser(name: $name) {
+      id
+    }
+  }
+\`
+const variables = { name: 'Alice' }
+const result = prisma.$graphql(mutation, variables)
+`}</Code>
+
+<Code lang="typescript">{`
+const mutation = \`
+  mutation ($name: String!){
+    createUser(name: $name) {
+      id
+    }
+  }
+\`
+const variables: UserCreateInput = { name: 'Alice' }
+const result: any = prisma.$graphql(mutation, variables)
+`}</Code>
+
+<Code lang="go">{`
+db.GraphQL(\`
+  mutation ($name: String!){
+    createUser(name: $name) {
+      id
+    }
+  }
+\`, map[string]interface{}{
+  "name": "Alice"
+})
+`}</Code>
+
+
+
+###  Prisma server
+
+Prisma server是连接到数据库的独立基础架构组件:
+
+![](https://imgur.com/774DDya.png)
+
+它需要与你的数据库连接信息和用户名密码来配置部署时。
+
+Prisma server的主要职责是翻译由Prisma client生成的实际的数据库查询请求。
+
+虽然有几种方法可以设置Prisma服务器，但目前推荐的方法是使用Docker。 下面是一个示例Docker Compose文件，用于配置连接到本地MySQL数据库的Prisma服务器：
+
+<Code lang="yaml">{`
+version: '3'
+services:
+  prisma:
+    image: prismagraphql/prisma:1.25
+    restart: always
+    ports:
+    - "4466:4466"
+    environment:
+      PRISMA_CONFIG: |
+        port: 4466
+        databases:
+          default:
+            connector: mysql
+            host: localhost
+            port: 3306
+            user: root
+            password: secret42
+`}</Code>
+
+Prisma service可以部署到你最喜爱的云提供商，如[阿里云](https://www.aliyun.com)[AWS](https://aws.amazon.com/de/)，[gcp](https://cloud.google.com/gcp/)，[Azure](https://azure.microsoft.com/)，[now](https://zeit.co/now)。 ..
+
+在Prisma cloud管理服务器
+
+Prisma cloud是一套工具，帮助你管理你的Prisma服务器和服务。它由基于Web的[Pri​​sma的控制台(https://app.prisma.io/),是Prisma CLI的部分。
+
+你可以在任何地方托管Prisma服务器 - 无论是你自己的服务器还是使用你喜欢的云提供商（例如aliyun，AWS，Google Cloud，Digital Ocean，......）。 无论Prisma服务器托管在哪里，你仍然可以通过Prisma Cloud进行管理。 这包括维护任务，如升级Prisma版本。
+
+为了充分利用这些优势，你需要使你的Prisma服务器连接到Prisma cloud。
+
+![](https://i.imgur.com/gUzWSwS.png)
+
+通过云提供商集成，你还可以直接通过Web UI设置Prisma服务器，而不是操作Docker和云提供商的API / UI。 例如，[setup a new Prisma server with a connected database on Heroku](https://www.youtube.com/watch?v=b2ofz3XxR14).
+
+要在没有设置自己的数据库和Prisma服务器的麻烦的情况下开始使用Prisma，你可以在Prisma Cloud中使用免费的托管Demo服务器。 运行prisma init并选择Demo服务器选项或按照“part1”教程。
+
+###  Prisma & GraphQL
+
+Prisma使用[GraphQL(http://graphql.org/)作为一种通用的数据库抽象，这意味着它_可以转变数据库为GraphQL API_，使你可以:
+
+- 读写数据使用_GraphQL queries_和_mutations_
+- 使用_GraphQL subscriptions_接收数据库事件的实时更新
+- 使用_GraphQL SDL_执行迁移你的数据模型
+
+当Prisma客户端向Prisma服务器发出请求时，它实际上会生成GraphQL操作，这些操作将被发送到Prisma的GraphQL API。 然后，客户端将GraphQL响应转换为预期的结果结构，并从调用的方法返回它。
+
+###  Prisma services
+
+数据库的GraphQL映射由Prisma服务提供。 每个服务都为数据库提供自己的GraphQL CRUD映射。 GraphQL API是自动生成的，并为服务的数据模型中的每个模型提供CRUD操作。
+
+Prisma服务正在Prisma服务器上运行。 Prisma服务器可以配置为托管多个Prisma服务。
+
+![](https://imgur.com/3RqTUXQ.png)
+
+
+Prisma服务是使用两个组件构成:
+
+ - `prisma.yml`:为Prisma services根配置文件(包括服务的端点，密码，数据模型文件的路径，...)
+ - `datamodel`:在数据模型中，可以定义其Prisma的使用来生成数据库的GraphQL API模型。它是一个使用[GraphQL SDL](https://www.prisma.io/blog/graphql-sdl-schema-definition-language-6755bcb9ce51/)语法和存储在一个叫做'datamodel.prisma`的文件中。
+
+一个`prisma.yml`类似于此:
+
+<Code lang="yaml">{`
+endpoint: http://localhost:4466
+datamodel: datamodel.prisma
+secret: mysecret42
+`}</Code>
+
+这是它包含的配置属性:
+
+- `endpoint`：应该部署服务的Prisma服务器的HTTP端点。 此端点公开服务的Prisma API。
+- `datamodel`：数据模型的_file path_，它作为GraphQL CRUD / realtime API的基础。
+- `secret`：_service secret_用于使用基于JWT的身份验证来保护服务的GraphQL API端点。 如果未指定`secret`，则该服务不需要身份验证。
+
+每个Prisma services只能有一个_endpoint_。端点是由以下几部分组成:
+
+-  **Host**: 你Prisma服务器的_host_(含协议和端口)，例如`https://example.com:4466`
+-  **Service name**: 端点URL的第一个路径组件是Prisma服务的名称，例如my-service。 如果未指定服务名称，则默认为default。
+-  **Service stage**: 端点URL的第二个路径组件是服务的stage。 与服务名称一样，这可以是随机字符串 - 但你通常使用描述部署环境的术语（例如dev，staging，prod，...）。 如果未指定服务stage，则默认为default。
+
+全部放在一起，一个服务可能看起来如下:`https://example.com:4466/my-service/dev`
+
+![](https://i.imgur.com/Ge85JyL.png)
+
+Prisma services也可以部署到没有任何路径组件的端点(例如，通过`http://localhost:4466`)，在这些情况下PRISMA采用`default`。 
+
+**这意味着`http://localhost:4466/default/default`总是可以写成`http://localhost:4466`**
+
+端点结构的另一个例外是Prisma云上的Demo服务器，它们在服务名称和阶段之前有一个额外的路径组件。这对应于工作区的名称。例如，如果你的工作区名为john-doe，则端点可能如下所示：http://prisma-eu1.sh/john-doe/my-service/dev
+
+
+
+下一节是Prisma创造的Graphql
+
+<InternalLink href="/docs/part5" as="/docs/part5">Prisma Graphql API</InternalLink>

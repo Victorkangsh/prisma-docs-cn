@@ -1,0 +1,247 @@
+import Code from '../home/demos/code'
+import { InternalLink } from './text/link';
+
+
+## datamodel introspecting 解析概述
+
+将Prisma连接到已具有数据库表/或包含某些数据的现有数据库时，从头开始手动编写数据模型同时确保它与现有数据的结构相匹配可能会非常繁琐。
+
+要自动执行此过程，你可以使用Prisma CLI中的[`prisma introspect`]命令，根据现有数据的实际结构生成[datamodel] 。
+
+生成的SDL可作为Prisma service的基础，但你可以根据需要轻松进行修改。一些常见的修改包括从GraphQL API隐藏表或将列赋予其他名称。
+
+
+
+### Introspecting Postgres数据库
+
+Postgres使用以下模型在内部组织数据库:
+
+![](https://i.imgur.com/0YJBgbW.png)
+
+**重要**:当Introspecting Postgres数据库时，你实际上是根据图示的模型Introspecting _schema_而不是_database_!
+
+有两种方法可以使用CLI来Introspecting Postgres:
+
+- 使用交互式`prisma init`向导
+- 使用专用的`prisma introspect`命令
+
+在这两种情况下，你都需要为正在运行的Postgres数据库提供_连接配置_。这包括以下内容:
+
+- **Host**:Postgres数据库的主机，例如`localhost`。
+- **Port**:Postgres数据库监听的端口，例如`5432`。
+- **User & Password**:Postgres数据库的用户名和密码。
+- **Name of existing _database_ **:Postgres _database_的名称(根据上面所示的模型)。
+- **Use SSL (Yes/No)**:如果数据库连接使用SSL，则需要选择"是"，否则选择"否"。
+- **Name of existing _schema_ **:Postgres _schema_的名称(根据上面所示的模型)，例如: `public`。
+
+#### 使用`prisma init`向导
+
+在交互式`prisma init`流程中，你可以选择使用数据连接到现有数据库。 CLI将询问数据库连接详细信息(如上所述)并验证它是否可以建立成功的连接。
+
+如果连接详细信息有效，CLI将introspect数据库并显示摘要。
+
+![](https://i.imgur.com/cNIeeJf.png)
+
+当`prisma init`终止时，CLI已为你创建了以下文件，你现在可以使用这些文件_deploy_一个新的Prisma service:
+
+- `datamodel.prisma`:包含基于现有数据库生成的数据模型(在SDL中)。
+- `docker-compose.yml`:包含Prisma service器配置的Docker Compose文件，包括有关如何连接数据库的详细信息
+- `prisma.yml`:服务的根配置文件
+
+为了能够使用GraphQL查询Postgres数据库，你现在需要_deploy_服务并打开GraphQL Playground:
+
+<Code>{`
+prisma deploy
+prisma playground
+`}</Code>
+
+#### 使用`prisma introspect`
+
+`prisma introspect`的工作方式与`prisma init`向导类似，因为你需要提供数据库连接信息。
+
+`prisma init`向导生成一个完整的_service配置_，`prisma introspect`只生成datamodel文件:
+
+- `datamodel-[TIMESTAMP].graghpql`:时间戳组件允许你在不覆盖现有数据模型的情况下对现有Prisma service使用introspect命令。
+
+在使用生成的数据模型部署服务之前，应确保Docker Compose文件中指定Prisma service器配置的`migrations`属性(PRISMA_CONFIG`环境变量)设置为"false":
+
+<Code lang="yaml">{`
+PRISMA_CONFIG: |
+  port: 4466
+  databases:
+    default:
+      connector: postgres
+      migrations: false # 确保这里为 false
+      host: localhost
+      port: 5432
+      user: postgres
+      password: postgres
+      database: postgres
+      schema: public
+`}</Code>
+
+将`migrations`设置为`false`可确保Prisma仅基于数据模型更新服务器的GraphQL API，但它不会执行基础Postgres数据库的合并和初始化。
+
+#### 生成的数据模型中的关系
+
+根据你在SQL数据库中对表之间的关系建模的方法，生成的数据模型中的关系可能看起来不同。 以下是Prisma如何解释SQL中指定的关系的概述:
+
+| SQL中的关系| 由Prisma(SDL)生成的关系|
+| --- | --- |
+| 内联关系列 | 一对多 |
+| 关系表 | 多对多 |
+| 带有额外列的关系表 | 用于表达关系的专用类型 |
+
+#### 内联关系列
+
+表示SQL数据库中关系的常用方法是通过_foreign key_约束:
+
+<Code lang="sql">{`
+CREATE TABLE product (
+  id           serial PRIMARY KEY UNIQUE
+, description  text NOT NULL
+);
+CREATE TABLE bill (
+  id         serial PRIMARY KEY UNIQUE
+, notes      text NOT NULL
+, product_id int REFERENCES product (id) ON UPDATE CASCADE
+);
+`}</Code>
+
+在这种情况下，`bill`使用外键来引用`product`表的`id`，从而在两个表之间创建一个_relation_。 基于此表结构，Prisma生成两个SDL模型，`Product`和`Bill`，具有_双向_关系(通过`product`和`bills`字段):
+
+<Code lang="graphql">{`
+type Product @pgTable(name: "product") {
+  description: String!
+  id: Int! @unique
+  bills: [Bill!]!
+}
+type Bill @pgTable(name: "bill") {
+  notes: String!
+  id: Int! @unique
+  product: Product @pgRelation(column: "product_id")
+}
+`}</Code>
+
+以下是Prisma如何为生成的字段生成名称:
+
+- `type Product`
+   - `description:String`以`product`表中的`description`列命名
+   - `id:Int!`以`product`表的`id`列命名
+   - `bills:[Bill!]!`以`bill`表的_复数_版本命名
+- `type Bill`
+   - `notes:String`以`bill`表上的`notes`列命名
+   - `id:Int!`以`bill`表上的`id`列命名
+   - `product:Product`以`bill`表上的`product_id`列命名; Prisma剥离了这些外键字段的后缀:`_ id`，`ID`和`Id`
+
+#### 关系表
+
+另一种在SQL数据库中表示关系的常用方法是通过专用的_relation table_来"连接"两个相关的表:
+
+<Code lang="sql">{`
+CREATE TABLE product (
+  id         serial PRIMARY KEY UNIQUE
+, product    text NOT NULL
+);
+CREATE TABLE bill (
+  id       serial PRIMARY KEY UNIQUE
+, bill     text NOT NULL
+);
+CREATE TABLE bill_product (
+  bill_id    int REFERENCES bill (id) ON UPDATE CASCADE ON DELETE CASCADE
+, product_id int REFERENCES product (id) ON UPDATE CASCADE
+);
+`}</Code>
+
+在这种情况下，关系表称为`bill_product`，简单地......只包含两列，它们都是`bill`和`product`表的`id`列的外键。
+
+#### 与额外列的关系
+
+有时，使用关于关系本身的元信息来丰富关系表是有帮助的:
+
+<Code lang="sql">{`
+CREATE TABLE product (
+  id         serial PRIMARY KEY UNIQUE
+, product    text NOT NULL
+);
+CREATE TABLE bill (
+  id       serial PRIMARY KEY UNIQUE
+, bill     text NOT NULL
+);
+CREATE TABLE bill_product (
+  bill_id    int REFERENCES bill (id) ON UPDATE CASCADE ON DELETE CASCADE
+, product_id int REFERENCES product (id) ON UPDATE CASCADE
+, some_other_column text NOT NULL
+);
+`}</Code>
+
+如果关系表包含此类额外信息，则Prisma会将关系表视为_dedicated type_:
+
+<Code lang="graphql">{`
+type Bill @pgTable(name: "bill") {
+  bill: String!
+  id: Int! @unique
+  bill_products: [Bill_product]
+}
+type Bill_product @pgTable(name: "bill_product") {
+  bill: Bill @pgRelation(column: "bill_id")
+  product: Product @pgRelation(column: "product_id")
+  some_other_column: String!
+}
+type Product @pgTable(name: "product") {
+  id: Int! @unique
+  product: String!
+  bill_products: [Bill_product]
+}
+`}</Code>
+
+这样，你可以充分灵活地使用常规查询和嵌套Mutation来设置和读取额外的列。
+
+### Introspecting Mongo数据库
+
+MonogDB使用以下模型在内部组织数据：
+
+![](https://imgur.com/OHZBaw6.png)
+
+有两种方法可以使用CLI来解析MongoDB数据库：
+
+ - 使用交互式`prisma init`向导
+ - 使用专用的`prisma introspect`命令
+
+在这两种情况下，您都需要为正在运行的MongoDB实例提供_connection details_。 这包括以下内容：
+
+ - 可以连接到MongoDB服务器的MongoDB[连接字符串](https://docs.mongodb.com/manual/reference/connection-string/)。
+ - 要连接的MongoDB[数据库](https://docs.mongodb.com/manual/core/databases-and-collections/#databases)的名称。
+
+#### 使用`prisma init`向导
+
+在交互式`prisma init`流程中，您可以选择使用数据连接到现有数据库。 CLI将询问数据库连接详细信息(如上所述)并验证它是否可以建立成功连接。
+
+如果连接详细信息有效，CLI将自省数据库并显示摘要。
+
+![](https://i.imgur.com/cNIeeJf.png)
+
+当`prisma init`终止时，CLI为您创建了以下文件，您现在可以使用这些文件_deploy_一个新的Prisma服务：
+
+ - `datamodel.prisma`：包含基于现有数据库生成的数据模型(在SDL中)。
+ - `docker-compose.yml`：包含Prisma服务器配置的Docker Compose文件，包括有关如何连接数据库的详细信息
+ -  prisma.yml：服务的根配置文件
+
+为了能够使用Prisma查询MongoDB数据库，您现在需要_deploy_服务并打开GraphQL Playground：
+
+<Code>{`
+prisma deploy
+prisma playground
+`}</Code>
+
+#### 使用`prisma introspect`
+
+`prisma introspect`的工作方式与`prisma init`向导类似，因为您需要提供数据库连接信息。
+
+`prisma init`向导生成一个完整的_service_配置，`prisma introspect`只生成datamodel文件：
+
+ - `datamodel-[TIMESTAMP] .prisma`：时间戳组件允许您在不覆盖现有数据模型的情况下对现有Prisma服务使用introspect命令。
+
+ ### prisma introspect MySQL 
+
+ Introspection目前仅支持PostgreSQL和MongoDB。 有一个待处理的[feature request](https://github.com/prisma/prisma/issues/2506)也可以为MySQL带来introspect。
