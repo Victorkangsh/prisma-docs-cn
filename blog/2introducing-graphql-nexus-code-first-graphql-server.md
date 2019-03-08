@@ -64,7 +64,7 @@ Nexus基于其原语`graphql-js`，使其与当前的GraphQL生态系统基本�
 
 #### 使用Nexus定义和实现GraphQL架构
 
-Nexus的API公开了许多函数，允许您为GraphQL架构定义和实现构建块，例如[对象类型](https://nexus.js.org/docs/api-objecttype)，[联合](https://nexus.js.org/docs/api-uniontype)和[接口](https://nexus.js.org/docs/api-interfacetype)，[枚举](https://nexus.js.org/docs/enumtype)以及您在[GraphQL类型系统中](https://facebook.github.io/graphql/draft/#sec-Type-System)找到的所有其他内容：
+Nexus的API公开了许多函数，允许您为GraphQL架构定义和实现构建块，例如[**Object Types**](https://nexus.js.org/docs/api-objecttype)，[**Unions**](https://nexus.js.org/docs/api-uniontype)和[**Interfaces**](https://nexus.js.org/docs/api-interfacetype)，[**Enums**](https://nexus.js.org/docs/enumtype)以及您在[GraphQL类型系统中](https://facebook.github.io/graphql/draft/#sec-Type-System)找到的所有其他内容：
 
 **Object Types**
 
@@ -275,7 +275,7 @@ yarn add nexus graphql
 > **npm**
 >
 > ```bash
-> npm install - save - dev ts - node - dev
+> npm install -save -dev ts-node-dev
 > ```
 >
 > **yarn**
@@ -303,7 +303,7 @@ yarn add nexus graphql
 > **npm**
 >
 > ```bash
-> npm install - save - dev nodemon
+> npm install --save -dev nodemon
 > ```
 >
 > **yarn**
