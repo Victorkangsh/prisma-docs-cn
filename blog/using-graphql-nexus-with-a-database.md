@@ -24,7 +24,7 @@
 
 ### 回顾：使用GraphQL Nexus进行代码优先开发
 
-在上一篇文章中，我们介绍了[GraphQL Nexus](https://nexus.js.org/docs/getting-started)，这是一个GraphQL库，可以为TypeScript和JavaScript实现代码优先开发。使用Nexus，GraphQL架构以*编程*方式定义和实现。因此，它遵循GraphQL服务器在其他语言中的成熟方法，例如[`sangria-graphql`](https://github.com/sangria-graphql/sangria)（Scala）[`graphlq-ruby`](https://github.com/rmosolgo/graphql-ruby)或[`graphene`](https://graphene-python.org/)（Python）。
+在[上一篇](./introducing-graphql-nexus-code-first-graphql-server.md)文章中，我们介绍了[GraphQL Nexus](https://nexus.js.org/docs/getting-started)，这是一个GraphQL库，可以为TypeScript和JavaScript实现代码优先开发。使用Nexus，GraphQL架构以*编程*方式定义和实现。因此，它遵循GraphQL服务器在其他语言中的成熟方法，例如[`sangria-graphql`](https://github.com/sangria-graphql/sangria)（Scala）[`graphlq-ruby`](https://github.com/rmosolgo/graphql-ruby)或[`graphene`](https://graphene-python.org/)（Python）。
 
 今天的文章是关于使用Prisma客户端和新[`nexus-prisma`](https://github.com/prisma/nexus-prisma)插件将基于Nexus的GraphQL服务器连接到数据库。我们稍后将向您介绍从头开始为博客应用程序构建GraphQL API的实际示例。
 
