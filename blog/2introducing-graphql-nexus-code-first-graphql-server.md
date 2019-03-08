@@ -275,7 +275,7 @@ yarn add nexus graphql
 > **npm**
 >
 > ```bash
-> npm install - save - dev ts - node - dev
+> npm install -save -dev ts-node-dev
 > ```
 >
 > **yarn**
