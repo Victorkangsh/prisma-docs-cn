@@ -1,3 +1,15 @@
+import withPost from '../../components/blog/with-post'
+
+export const meta = {
+  title: '将GraphQL Nexus与数据库一起使用',
+  description: '将GraphQL Nexus与数据库一起使用',
+  date: '2019-03-08T00:07:55.907Z',
+  url: 'https://prisma.1wire.com/blog/nexus-prisma',
+  link: '/blog/nexus-prisma'
+}
+
+export default withPost({...meta})
+
 # 将GraphQL Nexus与数据库一起使用
 
 > 翻译:[hanagm](https://github.com/hanagm)
@@ -5,10 +17,7 @@
 > [原文链接](https://www.prisma.io/blog/using-graphql-nexus-with-a-database-pmyl3660ncst/)
 
 
-
-
-
-[GraphQL Nexus](https://nexus.js.org/)是JavaScript / TypeScript的代码优先，类型安全的GraphQL架构构建库。了解如何使用Prisma客户端和新[`nexus-prisma`](https://github.com/prisma/nexus-prisma)插件将其连接到数据库。
+[GraphQL Nexus](https://nexus.js.org/)是JavaScript / TypeScript的代码优先、类型安全的GraphQL架构构建库。了解如何使用Prisma客户端和新[`nexus-prisma`](https://github.com/prisma/nexus-prisma)插件将其连接到数据库。
 
 ![img](https://www.prisma.io/static/posts/using-graphql-nexus-with-a-database.png)
 
@@ -16,23 +25,23 @@
 
 本文是由三部分组成的系列文章的*第三*部分：
 
-- 第1部分：[“架构优先”GraphQL服务器开发的问题](./1the-problems-of-schema-first-graphql-development.md)
-- 第2部分：[介绍GraphQL Nexus：代码优先的GraphQL服务器开发](./2introducing-graphql-nexus-code-first-graphql-server.md)
+- 第1部分：[“架构优先”GraphQL服务器开发的问题](/blog/sdl-problems)
+- 第2部分：[介绍GraphQL Nexus：代码优先的GraphQL服务器开发](/blog/nexus)
 - 第3部分：**将GraphQL Nexus与数据库一起使用**
 
 
 
 ## 回顾：使用GraphQL Nexus进行代码优先开发
 
-在[上一篇](./introducing-graphql-nexus-code-first-graphql-server.md)文章中，我们介绍了[GraphQL Nexus](https://nexus.js.org/docs/getting-started)，这是一个GraphQL库，可以为TypeScript和JavaScript实现代码优先开发。使用Nexus，GraphQL架构以*编程*方式定义和实现。因此，它遵循GraphQL服务器在其他语言中的成熟方法，例如[`sangria-graphql`](https://github.com/sangria-graphql/sangria)（Scala）[`graphlq-ruby`](https://github.com/rmosolgo/graphql-ruby)或[`graphene`](https://graphene-python.org/)（Python）。
+在[上一篇](/blog/nexus)文章中，我们介绍了[GraphQL Nexus](https://nexus.js.org/docs/getting-started)，这是一个GraphQL库，可以为TypeScript和JavaScript实现代码优先开发。使用Nexus，GraphQL架构以*编程*方式定义和实现。因此，它遵循GraphQL服务器在其他语言中的成熟方法，例如[`sangria-graphql`](https://github.com/sangria-graphql/sangria)（Scala）[`graphlq-ruby`](https://github.com/rmosolgo/graphql-ruby)或[`graphene`](https://graphene-python.org/)（Python）。
 
-今天的文章是关于使用Prisma客户端和新[`nexus-prisma`](https://github.com/prisma/nexus-prisma)插件将基于Nexus的GraphQL服务器连接到数据库。我们稍后将向您介绍从头开始为博客应用程序构建GraphQL API的实际示例。
+今天的文章是关于使用Prisma client和新[`nexus-prisma`](https://github.com/prisma/nexus-prisma)插件,将基于Nexus的GraphQL服务器连接到数据库。我们稍后将向您介绍从头开始为博客应用程序构建GraphQL API的实际示例。
 
 > `nexus-prisma`适用于PostgreSQL，MySQL和MongoDB。在[这里](https://nexus.js.org/docs/database-access-with-prisma)找到它的文档。
 
 
 
-### TLDR：`nexus-prisma`插件的好处
+### 概览：`nexus-prisma`插件的好处
 
 
 
@@ -48,7 +57,7 @@
 
 ### 了解`nexus-prisma`工作流程
 
-####  Prisma客户端作为ORM替代品
+####  Prisma client作为ORM替代品
 
 如果您以前没有使用过Prisma，请快速了解它的工作原理：
 
@@ -56,9 +65,9 @@
 2. 生成您的Prisma客户端，即类型安全的数据库客户端
 3. 使用Prisma客户端访问应用程序中的数据库（例如GraphQL API）
 
-#### 在`nexus-prisma`引擎盖下的插件
+#### 在`nexus-prisma`下的插件
 
-添加`nexus-prisma`到混合中时，还有另一个步骤：调用`nexus-prisma-generate`codegen CLI。它为您的Prisma模型生成完整的GraphQL CRUD API的构建块，例如，**User**它包括以下模型：
+添加`nexus-prisma`时，还有另一个步骤：调用`nexus-prisma-generate`codegen CLI。它为您的Prisma模型生成完整的GraphQL CRUD API的构建块，例如，**User**它包括以下模型：
 
 - **Queries**
   - **user(...): User!**: 获取单个记录
@@ -71,6 +80,7 @@
   - **deleteUser(...): User**: 删除记录
   - **updatesManyUsers(...): BatchPayload!**: 批量更新多条记录
   - **deleteManyUsers(...): BatchPayload!**: 批量删除多条记录
+
 - [**GraphQL input types**](https://graphql.org/graphql-js/mutations-and-input-types/)
   - **UserCreateInput**：覆盖记录的所有字段
   - **UserUpdateInput**：覆盖记录的所有字段
@@ -81,7 +91,7 @@
 
 > `UserCreateInput`并且`UserUpdateInput`关系字段的处理方式不同。
 
-当编写GraphQL服务器代码`nexus`和`nexus-prisma`你建立在通过曝光和他们定制你自己的API需要这些操作：
+当编写GraphQL服务器代码`nexus`和`nexus-prisma`时，暴露和定制你自己的API需要这些操作：
 
 ![img](https://imgur.com/dbEMHd5.png)
 
@@ -172,7 +182,7 @@ type Todo {
 
 我们将`prismaObjectType`要`Query`和`Mutation`。对于`Query`，我们保持所有领域（即`todo`，`todoes`和`todoesConnection`）。因为`Mutation`我们正在使用`prismaFields`自定义公开的操作。
 
-`prismaFields`让我们选择要公开的操作。在这种情况下，我们只想保持操作以*创建*模型（`createTodo`）。从生成的CRUD构建块中，我们既不包括`updateTodo`也不包含`deleteTodo`但是实现我们自己的`markAsDone(id: ID!)`突变来检查某个特定的突变`Todo`。
+`prismaFields`让我们选择要公开的操作。在这种情况下，我们只想保持操作以*创建*模型（`createTodo`）。从生成的CRUD构建块中，我们既不包括`updateTodo`也不包含`deleteTodo`但是实现我们自己的`markAsDone(id: ID!)`突变来检查某个特定的突变。
 
 
 
@@ -193,8 +203,6 @@ type Todo {
 
 如果您想跟随，则需要安装Prisma CLI：
 
-
-
 **npm**(国内推荐使用cnpm)
 
 ```bash
@@ -203,19 +211,11 @@ npm install -g prisma
 cnpm install -g prisma
 ```
 
-**yarn**
+**或yarn**
 
 ```
 yarn global add prisma
 ```
-
-**Homebrew**
-
-```
-brew tap prisma/prisma
-brew install prisma
-```
-
 
 
 #### 1）使用TypeScript设置Prisma项目，`nexus`和`nexus-prisma`
@@ -233,7 +233,7 @@ brew install prisma
 > 在交互式提示中，选择以下选项：
 >
 >
-> 1、选择**演示服务器**（包括Prisma Cloud中的免费和托管演示数据库）
+> 1、选择**demo server**（拥有Prisma Cloud中的免费和托管demo数据库）
 >
 > 2、在浏览器中使用Prisma Cloud进行**身份验证**（如有必要）
 >
@@ -260,7 +260,7 @@ brew install prisma
 >     - npx nexus-prisma-generate --client ./generated/prisma-client --output ./generated/nexus-prisma
 > ```
 >
-> 这样可以确保每当您对模型进行更改时，prisma客户机以及生成的nexus prisma crud构建基块都会被更新。既然我们使用的是typescript，那么让我们快速添加一个tsconfig.json：
+> 这样可以确保每当您对模型进行更改时，prisma client以及生成的nexus prisma crud构建块都会被更新。既然我们使用的是typescript，那么让我们快速添加一个`tsconfig.json`：
 >
 > ```
 > {
@@ -375,7 +375,7 @@ server.start(() => console.log(`Server is running on http://localhost:4000`))
 
 
 
-运行后`npm run start`，您可以在http://localhost:4000上为您的graphql服务器打开graphql操作界面。
+运行后`npm run start`，您可以在`http://localhost:4000`上为您的graphql服务器打开graphql操作界面。
 
 使用上面编写的小代码，您已经拥有了一个完整的GraphQL CRUD API。
 
@@ -470,7 +470,7 @@ mutation {
 
 
 
-#### 4）通过自定义GraphQL API `nexus-prisma`
+#### 4）通过`nexus-prisma`自定义GraphQL API 
 
 在本节中，我们将了解如何`nexus-prisma`自定义CRUD GraphQL API 。具体来说，我们将：
 
@@ -484,24 +484,24 @@ mutation {
 
 
 
-   ##### 4.1）隐藏`User`模型中的字段
+##### 4.1）隐藏`User`模型中的字段
 
-   在本节中，我们将隐藏模型中的`email`字段`User`。
+在本节中，我们将隐藏模型中的`email`字段`User`。
 
-   要自定义模型，我们需要将`prismaObjectType`函数应用于它并将该`definition(t)`函数作为选项传递：
+要自定义模型，我们需要将`prismaObjectType`函数应用于它并将该`definition(t)`函数作为选项传递：
 
-   ```typescript
-   const User = prismaObjectType({
-     name: 'User',
-     definition(t) {
-       t.prismaFields(['id', 'name', 'posts'])
-     }
-   })
-   ```
+```typescript
+const User = prismaObjectType({
+  name: 'User',
+  definition(t) {
+    t.prismaFields(['id', 'name', 'posts'])
+  }
+})
+```
 
-   通过调用`prismaFields`模型`t`，我们可以自定义公开的字段（及其参数）。因为`email`未包含在列表中，所以它已从我们的GraphQL API中删除。
+通过调用`prismaFields`模型`t`，我们可以自定义公开的字段（及其参数）。因为`email`未包含在列表中，所以它已从我们的GraphQL API中删除。
 
-   ![img](https://imgur.com/Zwby9Hs.png)
+![img](https://imgur.com/Zwby9Hs.png)
 
 
 
@@ -515,10 +515,9 @@ const schema =  makePrismaSchema （{
 }
 ```
 
-请注意，您的编辑器能够根据生成的CRUD构建基块建议传递到prismaObjectType和prismaFields中的内容。这意味着当您键入prismaObjectType（“”）并点击ctrl+space时，它显示了所有生成的CRUD构建块的名称。当调用t.prismafields（[“”]）时，它表示t的字段:
+请注意，您的编辑器能够根据生成的CRUD构建基块建议传递到prismaObjectType和prismaFields中的内容。这意味着当您键入prismaObjectType（''）并点击ctrl+space时，它显示了所有生成的CRUD构建块的名称。当调用t.prismafields（['']）时，它表示t的字段:
 
-![Jietu20190308-123954-HD](./assets/Jietu20190308-123954-HD.gif)
-
+![Jietu20190308-123954-HD](/static/assets/Jietu20190308-123954-HD.gif)
 
 
 ##### 4.2）向`Post`模型添加计算字段
@@ -705,7 +704,7 @@ type Post {
 
 ### Try out `nexus-prisma` today🙌
 
-有几种方法可供您试用[`nexus-prisma`](https://github.com/prisma/nexus-prisma)。您可以按照文档中的“ [**入门”部分进行操作，**](https://nexus.js.org/docs/database-access-with-prisma#getting-started)也可以浏览我们的[**TypeScript GraphQL示例**](https://github.com/prisma/prisma-examples/tree/master/typescript)。
+有几种方法可供您试用[`nexus-prisma`](https://github.com/prisma/nexus-prisma)。您可以按照文档中的“ [**入门部分进行操作，**](https://nexus.js.org/docs/database-access-with-prisma#getting-started)也可以浏览我们的[**TypeScript GraphQL示例**](https://github.com/prisma/prisma-examples/tree/master/typescript)。
 
 请通过[打开GitHub问题](https://github.com/prisma/nexus-prisma)或联系我们的[Slack](https://slack.prisma.io/)来分享您的反馈。
 

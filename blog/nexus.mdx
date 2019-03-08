@@ -1,3 +1,16 @@
+import withPost from '../../components/blog/with-post'
+
+export const meta = {
+  title: 'GraphQL Nexus简介：代码优先的GraphQL服务器开发',
+  description: 'GraphQL Nexus简介：代码优先的GraphQL服务器开发',
+  date: '2019-03-08T00:06:55.907Z',
+  url: 'https://prisma.1wire.com/blog/nexus',
+  link: '/blog/nexus'
+}
+
+export default withPost({...meta})
+
+
 # GraphQL Nexus简介：代码优先的GraphQL服务器开发
 
 > 翻译:[hanagm](https://github.com/hanagm)
@@ -8,7 +21,7 @@
 
 
 
-在[上一篇](./the-problems-of-schema-first-graphql-development.md)文章中，我们概述了SDL-first GraphQL服务器开发的问题。本周，我们很高兴地宣布GraphQL Nexus，这是一个代码优先的GraphQL库。邀请者[Tim Griesser](https://twitter.com/tgriesser)的文章。
+在[上一篇](/blog/sdl-problems)文章中，我们概述了SDL-first GraphQL服务器开发的问题。本周，我们很高兴地宣布GraphQL Nexus，这是一个代码优先的GraphQL库。[Tim Griesser](https://twitter.com/tgriesser)的文章。
 
 ![img](https://www.prisma.io/static/posts/introducing-graphql-nexus-code-first-graphql-server-development.png)
 
@@ -16,9 +29,9 @@
 
 本文是由三部分组成的系列文章的*第二*部分：
 
-- 第1部分：[“架构优先”GraphQL服务器开发的问题](./1the-problems-of-schema-first-graphql-development.md)
+- 第1部分：[“架构优先”GraphQL服务器开发的问题](/blog/sdl-problems)
 - 第2部分：**使用GraphQL Nexus进行代码优先的GraphQL服务器开发**
-- 第3部分：[将GraphQL Nexus与数据库一起使用](./3using-graphql-nexus-with-a-database.md)
+- 第3部分：[将GraphQL Nexus与数据库一起使用](/blog/nexus-prisma)
 
 **在[Twitter上关注我们，](https://twitter.com/prisma)**以便在即将发布的文章时收到通知。
 
@@ -30,11 +43,11 @@
 
 
 
-如前一篇[文章所述](./the-problems-of-schema-first-graphql-development.md)，SDL-first GraphQL服务器开发存在许多挑战，例如*保持SDL和解析器同步*，*模块化GraphQL架构*以及*实现出色的IDE支持*。大多数问题*都*可以解决，但这只会以学习，使用和集成无数其他工具为代价。
+如前一篇[文章所述](/blog/sdl-problems)，SDL-first GraphQL服务器开发存在许多挑战，例如*保持SDL和解析器同步*，*模块化GraphQL架构*以及*实现出色的IDE支持*。大多数问题*都*可以解决，但这只会以学习，使用和集成无数其他工具为代价。
 
 
 
-今天我们正在介绍一个库，它实现了GraphQL服务器开发的代码优先方法：[**GraphQL Nexus**](https://nexus.js.org/)。
+今天我们介绍一个库，它实现了GraphQL服务器开发的代码优先方法：[**GraphQL Nexus**](https://nexus.js.org/)。
 
 ------
 
@@ -42,11 +55,11 @@
 
 #### 两全其美：架构优先和代码优先
 
-在上一篇文章中，我们开发了对*schema-* first，*SDL-* first 和*code-* first方法的理解，用于构建GraphQL服务器：
+在上一篇文章中，我们对比了对*schema-first* ，*SDL-first*  和*code-first* 方法的理解，用于构建GraphQL服务器：
 
-- ***schema-first**：前端架构设计是开发过程的关键部分
+- **schema-first**：前端架构设计是开发过程的关键部分
 - **SDL-first**：GraphQL架构的SDL版本是API *的真实来源*
-- ***code-* first**：GraphQL架构以编程方式构建
+- ***code-first**：GraphQL架构以编程方式构建
 
 作为代码优先框架，GraphQL Nexus仍可用于schema优先开发。架构优先和代码优先不是对立的方法：它们在组合时变得更有用。
 
@@ -178,7 +191,7 @@ const DateScalar = scalarType({
 })
 ```
 
-该`Query`和`Mutation`类型是所谓的*根种*在GraphQL模式。Nexus提供了一个速记API来定义：
+该`Query`和`Mutation`类型是所谓的root schema。Nexus提供了一个API来定义：
 
 **Query**
 
@@ -232,7 +245,7 @@ const schema = makeSchema({
 // ... feed the `schema` into your GraphQL server (e.g. apollo-server or graphql-yoga)
 ```
 
-`makeSchema`还可以让您提供[更漂亮的配置，](https://prettier.io/docs/en/configuration.html)以便生成的代码符合您的风格指南💅
+`makeSchema`还可以提供[prettier的配置，](https://prettier.io/docs/en/configuration.html)以便生成的代码符合您的风格指南💅
 
 
 
@@ -275,7 +288,7 @@ yarn add nexus graphql
 > **npm**
 >
 > ```bash
-> npm install - save - dev ts - node - dev
+> npm install -D ts-node-dev
 > ```
 >
 > **yarn**
@@ -303,7 +316,7 @@ yarn add nexus graphql
 > **npm**
 >
 > ```bash
-> npm install - save - dev nodemon
+> npm install -D nodemon
 > ```
 >
 > **yarn**
@@ -366,11 +379,11 @@ server.start(() => `Server is running on http://localhost:4000`)
 
 Nexus API的设计特别注重开发人员的体验。一些核心设计目标是：
 
-- 况下类型安全
+- 类型安全
 
 - 可读性
 
-- 开发人员工效学
+- 开发人员效率
 
 - 与[Prettier](https://prettier.io/)轻松集成
 
@@ -378,9 +391,6 @@ Nexus API的设计特别注重开发人员的体验。一些核心设计目标�
 在构建API时运行的开发服务器可确保您始终对刚刚引入的架构更改进行自动完成和错误检查。
 
 借助GraphQL Playground中的新[架构轮询功能](https://medium.com/novvum/6c9da4bbd552)，您可以在调整架构时立即重新加载GraphQL API。
-
-
-
 
 
 ### 让我们知道你的想法✍️
@@ -391,4 +401,4 @@ Nexus API的设计特别注重开发人员的体验。一些核心设计目标�
 
 
 
-如果您遇到任何问题，请[打开GitHub问题](https://github.com/prisma/nexus/issues/new)或在我们的[Slack中联系](https://slack.prisma.io/)。
+如果您遇到任何问题，请[打开GitHub](https://github.com/prisma/nexus/issues/new)或在我们的[Slack中联系](https://slack.prisma.io/)。
