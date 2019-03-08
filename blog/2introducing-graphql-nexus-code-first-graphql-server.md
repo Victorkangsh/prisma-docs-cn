@@ -303,7 +303,7 @@ yarn add nexus graphql
 > **npm**
 >
 > ```bash
-> npm install - save - dev nodemon
+> npm install --save -dev nodemon
 > ```
 >
 > **yarn**
