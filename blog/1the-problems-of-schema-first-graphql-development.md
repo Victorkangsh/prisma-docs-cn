@@ -1,5 +1,9 @@
 # “Schema优先”GraphQL服务器开发的问题
 
+> 翻译:[hanagm](https://github.com/hanagm)
+>
+> [原文链接](https://www.prisma.io/blog/the-problems-of-schema-first-graphql-development-x1mn4cb0tyl3/)
+
 
 
 GraphQL服务器开发的工具在过去两年中爆炸式增长。我们认为对大多数工具的需求来自流行的Schema优先方法 - 并且可以通过替代方案解决：代码优先。

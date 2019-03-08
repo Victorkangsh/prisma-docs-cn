@@ -1,5 +1,11 @@
 # GraphQL Nexus简介：代码优先的GraphQL服务器开发
 
+> 翻译:[hanagm](https://github.com/hanagm)
+>
+> [原文链接](https://www.prisma.io/blog/introducing-graphql-nexus-code-first-graphql-server-development-ll6s1yy5cxl5/)
+
+
+
 
 
 在[上一篇](./the-problems-of-schema-first-graphql-development.md)文章中，我们概述了SDL-first GraphQL服务器开发的问题。本周，我们很高兴地宣布GraphQL Nexus，这是一个代码优先的GraphQL库。邀请者[Tim Griesser](https://twitter.com/tgriesser)的文章。

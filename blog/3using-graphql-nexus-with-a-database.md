@@ -1,10 +1,10 @@
-
-
-
-
-
-
 # 将GraphQL Nexus与数据库一起使用
+
+> 翻译:[hanagm](https://github.com/hanagm)
+>
+> [原文链接](https://www.prisma.io/blog/using-graphql-nexus-with-a-database-pmyl3660ncst/)
+
+
 
 
 
@@ -22,7 +22,7 @@
 
 
 
-### 回顾：使用GraphQL Nexus进行代码优先开发
+## 回顾：使用GraphQL Nexus进行代码优先开发
 
 在[上一篇](./introducing-graphql-nexus-code-first-graphql-server.md)文章中，我们介绍了[GraphQL Nexus](https://nexus.js.org/docs/getting-started)，这是一个GraphQL库，可以为TypeScript和JavaScript实现代码优先开发。使用Nexus，GraphQL架构以*编程*方式定义和实现。因此，它遵循GraphQL服务器在其他语言中的成熟方法，例如[`sangria-graphql`](https://github.com/sangria-graphql/sangria)（Scala）[`graphlq-ruby`](https://github.com/rmosolgo/graphql-ruby)或[`graphene`](https://graphene-python.org/)（Python）。
 
@@ -34,6 +34,8 @@
 
 ### TLDR：`nexus-prisma`插件的好处
 
+
+
 - GraphQL中Prisma模型的CRUD操作
 
 - 自定义Prisma模型，例如*隐藏某些字段*或*添加计算字段*
@@ -41,6 +43,7 @@
 - 完全类型安全：GraphQL模式和数据库的一致类型集
 
 - 与GraphQL生态系统兼容（例如`apollo-server`，`graphql-yoga`，...）
+
 
 
 ### 了解`nexus-prisma`工作流程
@@ -177,7 +180,7 @@ type Todo {
 
 
 
-### 示例：从标准CRUD到自定义GraphQL API
+## 示例：从标准CRUD到自定义GraphQL API
 
 
 
@@ -196,6 +199,7 @@ type Todo {
 
 ```bash
 npm install -g prisma
+#or
 cnpm install -g prisma
 ```
 
