@@ -12,7 +12,7 @@
 
 - 第1部分：[“架构优先”GraphQL服务器开发的问题](./1the-problems-of-schema-first-graphql-development.md)
 - 第2部分：**使用GraphQL Nexus进行代码优先的GraphQL服务器开发**
-- 第3部分：[将GraphQL Nexus与数据库一起使用](./using-graphql-nexus-with-a-database.mk)
+- 第3部分：[将GraphQL Nexus与数据库一起使用](./3using-graphql-nexus-with-a-database.mk)
 
 **在[Twitter上关注我们，](https://twitter.com/prisma)**以便在即将发布的文章时收到通知。
 

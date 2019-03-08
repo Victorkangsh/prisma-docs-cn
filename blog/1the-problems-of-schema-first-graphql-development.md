@@ -11,8 +11,8 @@ GraphQL服务器开发的工具在过去两年中爆炸式增长。我们认为�
 本文是由三部分组成的系列文章的*第一*部分：
 
 - 第1部分：**“Schema优先”GraphQL服务器开发的问题**
-- 第2部分：[介绍GraphQL Nexus：代码优先的GraphQL服务器开发](https://www.prisma.io/blog/introducing-graphql-nexus-code-first-graphql-server-development-ll6s1yy5cxl5/)
-- 第3部分：[将GraphQL Nexus与数据库一起使用](https://www.prisma.io/blog/using-graphql-nexus-with-a-database-pmyl3660ncst/)
+- 第2部分：[介绍GraphQL Nexus：代码优先的GraphQL服务器开发](./2introducing-graphql-nexus-code-first-graphql-server.md)
+- 第3部分：[将GraphQL Nexus与数据库一起使用](./3using-graphql-nexus-with-a-database.md)
 
 **在Twitter上关注我们，**以便在即将发布的文章时收到通知。
 

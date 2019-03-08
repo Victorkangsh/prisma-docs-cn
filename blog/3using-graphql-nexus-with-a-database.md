@@ -16,7 +16,7 @@
 
 本文是由三部分组成的系列文章的*第三*部分：
 
-- 第1部分：[“架构优先”GraphQL服务器开发的问题](./the-problems-of-schema-first-graphql-development.md)
+- 第1部分：[“架构优先”GraphQL服务器开发的问题](./1the-problems-of-schema-first-graphql-development.md)
 - 第2部分：[介绍GraphQL Nexus：代码优先的GraphQL服务器开发](./2introducing-graphql-nexus-code-first-graphql-server.md)
 - 第3部分：**将GraphQL Nexus与数据库一起使用**
 
